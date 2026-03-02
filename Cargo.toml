@@ -1,0 +1,12 @@
+[package]
+name = "sip-uri"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "RFC 3261 SIP/SIPS and RFC 3966 tel: URI parser with zero dependencies"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ticpu/sip-uri"
+keywords = ["sip", "uri", "voip", "tel", "rfc3261"]
+categories = ["parser-implementations", "network-programming"]
+
+[dependencies]
