@@ -34,7 +34,8 @@
 //!     Uri::Sip(sip) => println!("SIP: {sip}"),
 //!     Uri::Tel(tel) => println!("Tel: {tel}"),
 //!     Uri::Urn(urn) => println!("URN: {urn}"),
-//!     _ => println!("other"),
+//!     Uri::Other(raw) => println!("other: {raw}"),
+//!     _ => {}
 //! }
 //! ```
 

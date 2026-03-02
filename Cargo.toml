@@ -3,10 +3,13 @@ name = "sip-uri"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.70"
-description = "RFC 3261 SIP/SIPS and RFC 3966 tel: URI parser with zero dependencies"
+authors = ["Jérôme Poulin <jeromepoulin@gmail.com>"]
+description = "RFC 3261 SIP/SIPS, RFC 3966 tel:, and RFC 8141 URN parser with zero dependencies"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ticpu/sip-uri"
-keywords = ["sip", "uri", "voip", "tel", "rfc3261"]
+documentation = "https://docs.rs/sip-uri"
+readme = "README.md"
+keywords = ["sip", "uri", "voip", "tel", "urn"]
 categories = ["parser-implementations", "network-programming"]
 
 [dependencies]

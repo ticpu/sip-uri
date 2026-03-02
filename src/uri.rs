@@ -6,7 +6,11 @@ use crate::sip_uri::SipUri;
 use crate::tel_uri::TelUri;
 use crate::urn_uri::UrnUri;
 
-/// A parsed URI: SIP/SIPS, tel, or URN.
+/// A parsed URI: SIP/SIPS, tel, URN, or an opaque URI with an unrecognized scheme.
+///
+/// The `Other` variant stores the raw URI string for schemes this crate does
+/// not parse (e.g. `http:`, `https:`, `data:`). This allows SIP header values
+/// like `Call-Info` to round-trip without rejecting non-SIP URIs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Uri {
@@ -16,6 +20,8 @@ pub enum Uri {
     Tel(TelUri),
     /// URN (Uniform Resource Name).
     Urn(UrnUri),
+    /// URI with an unrecognized scheme, stored as-is.
+    Other(String),
 }
 
 impl Uri {
@@ -42,6 +48,30 @@ impl Uri {
             _ => None,
         }
     }
+
+    /// If this is an unrecognized scheme, return the raw URI string.
+    pub fn as_other(&self) -> Option<&str> {
+        match self {
+            Uri::Other(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// The scheme of this URI (lowercase).
+    pub fn scheme(&self) -> &str {
+        match self {
+            Uri::Sip(u) => match u.scheme() {
+                crate::Scheme::Sip => "sip",
+                crate::Scheme::Sips => "sips",
+            },
+            Uri::Tel(_) => "tel",
+            Uri::Urn(_) => "urn",
+            Uri::Other(s) => s
+                .find(':')
+                .map(|i| &s[..i])
+                .unwrap_or(s),
+        }
+    }
 }
 
 impl From<SipUri> for Uri {
@@ -66,6 +96,12 @@ impl FromStr for Uri {
     type Err = ParseUriError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "*" {
+            return Err(ParseUriError(
+                "wildcard '*' is not a URI; handle it at the protocol layer (Contact: * or OPTIONS * SIP/2.0)".into(),
+            ));
+        }
+
         // Detect scheme by scanning to first `:`
         let colon = s
             .find(':')
@@ -79,7 +115,7 @@ impl FromStr for Uri {
         } else if scheme.eq_ignore_ascii_case("urn") {
             Ok(Uri::Urn(s.parse::<UrnUri>()?))
         } else {
-            Err(ParseUriError(format!("unsupported scheme '{scheme}'")))
+            Ok(Uri::Other(s.to_string()))
         }
     }
 }
@@ -90,6 +126,7 @@ impl fmt::Display for Uri {
             Uri::Sip(u) => write!(f, "{u}"),
             Uri::Tel(u) => write!(f, "{u}"),
             Uri::Urn(u) => write!(f, "{u}"),
+            Uri::Other(s) => write!(f, "{s}"),
         }
     }
 }
@@ -154,8 +191,35 @@ mod tests {
     }
 
     #[test]
-    fn unknown_scheme() {
-        assert!("http://example.com"
+    fn unknown_scheme_stored_as_other() {
+        let uri: Uri = "http://example.com"
+            .parse()
+            .unwrap();
+        assert_eq!(uri.as_other(), Some("http://example.com"));
+        assert_eq!(uri.scheme(), "http");
+        assert!(uri
+            .as_sip()
+            .is_none());
+        assert!(uri
+            .as_tel()
+            .is_none());
+        assert!(uri
+            .as_urn()
+            .is_none());
+    }
+
+    #[test]
+    fn other_display_roundtrip() {
+        let input = "https://example.com/photo.jpg";
+        let uri: Uri = input
+            .parse()
+            .unwrap();
+        assert_eq!(uri.to_string(), input);
+    }
+
+    #[test]
+    fn missing_scheme_fails() {
+        assert!("no-colon-here"
             .parse::<Uri>()
             .is_err());
     }

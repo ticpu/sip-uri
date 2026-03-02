@@ -199,6 +199,18 @@ fn invalid_empty_string() {
         .is_err());
 }
 
+#[test]
+fn wildcard_uri_gives_specific_error() {
+    let err = "*"
+        .parse::<Uri>()
+        .unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("wildcard"),
+        "error should mention wildcard: {msg}"
+    );
+}
+
 // ========================================================================
 // tel: URI test cases
 // ========================================================================
@@ -725,15 +737,72 @@ fn sofia_canonize_method_param() {
 
 #[test]
 fn sofia_full_with_fragment() {
-    // Sofia-sip parses fragments, we don't support them (SIP URIs don't have fragments
-    // per RFC 3261) but the params/headers before it should parse
-    let uri: SipUri = "sip:user:pass@host:32;param=1?From=foo@bar&To=bar@baz"
+    let uri: SipUri = "sip:user:pass@host:32;param=1?From=foo@bar&To=bar@baz#unf"
         .parse()
         .unwrap();
     assert_eq!(uri.user(), Some("user"));
     assert_eq!(uri.password(), Some("pass"));
     assert_eq!(uri.host(), &Host::Hostname("host".into()));
     assert_eq!(uri.port(), Some(32));
+    assert_eq!(uri.param("param"), Some(&Some("1".into())));
+    assert_eq!(uri.header("From"), Some("foo@bar"));
+    assert_eq!(uri.header("To"), Some("bar@baz"));
+    assert_eq!(uri.fragment(), Some("unf"));
+    assert_eq!(
+        uri.to_string(),
+        "sip:user:pass@host:32;param=1?From=foo@bar&To=bar@baz#unf"
+    );
+}
+
+#[test]
+fn sip_fragment_after_params() {
+    let uri: SipUri = "sip:alice@example.com;transport=tcp#section"
+        .parse()
+        .unwrap();
+    assert_eq!(uri.param("transport"), Some(&Some("tcp".into())));
+    assert_eq!(uri.fragment(), Some("section"));
+    assert_eq!(
+        uri.to_string(),
+        "sip:alice@example.com;transport=tcp#section"
+    );
+}
+
+#[test]
+fn sip_fragment_after_host() {
+    let uri: SipUri = "sip:example.com#frag"
+        .parse()
+        .unwrap();
+    assert_eq!(uri.host(), &Host::Hostname("example.com".into()));
+    assert_eq!(uri.fragment(), Some("frag"));
+}
+
+#[test]
+fn sip_no_fragment() {
+    let uri: SipUri = "sip:alice@example.com"
+        .parse()
+        .unwrap();
+    assert_eq!(uri.fragment(), None);
+}
+
+#[test]
+fn tel_fragment_after_params() {
+    let uri: TelUri = "tel:+15551234567;cpc=emergency#context"
+        .parse()
+        .unwrap();
+    assert_eq!(uri.number(), "+15551234567");
+    assert_eq!(uri.param("cpc"), Some(&Some("emergency".into())));
+    assert_eq!(uri.fragment(), Some("context"));
+    assert_eq!(uri.to_string(), "tel:+15551234567;cpc=emergency#context");
+}
+
+#[test]
+fn tel_hash_in_number_not_fragment() {
+    // # in tel number is a phonedigit-hex, not a fragment
+    let uri: TelUri = "tel:*67#"
+        .parse()
+        .unwrap();
+    assert_eq!(uri.number(), "*67#");
+    assert_eq!(uri.fragment(), None);
 }
 
 #[test]

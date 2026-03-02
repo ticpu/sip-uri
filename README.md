@@ -35,10 +35,10 @@ sip-uri = "0.1"
 
 | Type | Description |
 |---|---|
-| `SipUri` | SIP or SIPS URI with user, host, port, params, headers |
-| `TelUri` | tel: URI with number and params |
+| `SipUri` | SIP or SIPS URI with user, host, port, params, headers, fragment |
+| `TelUri` | tel: URI with number, params, fragment |
 | `UrnUri` | URN with NID, NSS, and optional r/q/f components |
-| `Uri` | Enum dispatching `Sip` / `Tel` / `Urn` based on scheme |
+| `Uri` | Enum dispatching `Sip` / `Tel` / `Urn` / `Other` based on scheme |
 | `NameAddr` | Display name + URI (`"Alice" <sip:...>`) |
 | `Host` | IPv4, IPv6, or hostname |
 | `Scheme` | `Sip` or `Sips` |
@@ -50,19 +50,19 @@ Parsing is case-insensitive for schemes, hosts, and parameter names.
 ## SipUri
 
 ```rust
-use sip_uri::SipUri;
+use sip_uri::{SipUri, Scheme};
 
 // Full SIP URI with user-params, password, port, params, headers
 let uri: SipUri = "sips:+15551234567;cpc=emergency:secret@[2001:db8::1]:5061;user=phone?Subject=test"
     .parse().unwrap();
 
-assert_eq!(uri.scheme().as_str(), "sips");
+assert_eq!(uri.scheme(), Scheme::Sips);
 assert_eq!(uri.user(), Some("+15551234567"));
 assert_eq!(uri.user_params(), &[("cpc".into(), Some("emergency".into()))]);
 assert_eq!(uri.password(), Some("secret"));
 assert_eq!(uri.port(), Some(5061));
 assert_eq!(uri.param("user"), Some(&Some("phone".into())));
-assert_eq!(uri.header("Subject"), Some(&"test".to_string()));
+assert_eq!(uri.header("Subject"), Some("test"));
 ```
 
 ### User-params
@@ -197,11 +197,17 @@ assert_eq!(uri.user(), Some(r#"%22foo%22"#));
   case-insensitive per RFC. Host names are lowercased.
 - **`#[non_exhaustive]`** -- on `Uri`, `Host`, and `Scheme` enums for
   forward-compatible matching.
+- **Fragment support** -- `SipUri` and `TelUri` parse and round-trip `#fragment`
+  components (accepted permissively, matching sofia-sip behavior).
+- **Any-scheme fallback** -- `Uri::Other` stores unrecognized schemes (http,
+  https, data, etc.) as raw strings, so `NameAddr` can parse SIP headers like
+  `Call-Info` that carry non-SIP URIs.
 
 ## RFC coverage
 
 - **RFC 3261 19/25** -- SIP-URI, SIPS-URI syntax, comparison, percent-encoding
 - **RFC 3966** -- tel-URI (global/local numbers, visual separators, parameters)
+- **RFC 8141** -- URN syntax (NID, NSS, r/q/f components)
 
 ## Development
 

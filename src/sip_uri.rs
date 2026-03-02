@@ -10,7 +10,8 @@ type Params = Vec<(String, Option<String>)>;
 type Headers = Vec<(String, String)>;
 
 type UserinfoResult = Result<(Option<String>, Params, Option<String>), ParseSipUriError>;
-type HostportResult = Result<(Host, Option<u16>, Params, Headers), ParseSipUriError>;
+type HostportResult =
+    Result<(Host, Option<u16>, Params, Headers, Option<String>), ParseSipUriError>;
 
 /// SIP or SIPS URI per RFC 3261 §19.
 ///
@@ -27,6 +28,7 @@ pub struct SipUri {
     port: Option<u16>,
     params: Vec<(String, Option<String>)>,
     headers: Vec<(String, String)>,
+    fragment: Option<String>,
 }
 
 /// SIP URI scheme.
@@ -59,6 +61,7 @@ impl SipUri {
             port: None,
             params: Vec::new(),
             headers: Vec::new(),
+            fragment: None,
         }
     }
 
@@ -163,6 +166,21 @@ impl SipUri {
             .map(|(_, v)| v.as_str())
     }
 
+    /// The fragment component (after `#`), if present.
+    ///
+    /// RFC 3261 does not define fragments for SIP URIs, but sofia-sip
+    /// and real-world implementations accept them permissively.
+    pub fn fragment(&self) -> Option<&str> {
+        self.fragment
+            .as_deref()
+    }
+
+    /// Set the fragment component.
+    pub fn with_fragment(mut self, fragment: impl Into<String>) -> Self {
+        self.fragment = Some(fragment.into());
+        self
+    }
+
     /// Convenience: `user@host:port` or `host:port` string.
     pub fn user_host(&self) -> String {
         let mut s = String::new();
@@ -216,8 +234,9 @@ impl FromStr for SipUri {
             (None, Vec::new(), None)
         };
 
-        // 4. Parse host, port, params, headers from the rest
-        let (host, port, uri_params, headers) = parse_hostport_params_headers(hostport_rest)?;
+        // 4. Parse host, port, params, headers, fragment from the rest
+        let (host, port, uri_params, headers, fragment) =
+            parse_hostport_params_headers(hostport_rest)?;
 
         Ok(SipUri {
             scheme,
@@ -228,6 +247,7 @@ impl FromStr for SipUri {
             port,
             params: uri_params,
             headers,
+            fragment,
         })
     }
 }
@@ -344,6 +364,19 @@ fn parse_hostport_params_headers(s: &str) -> HostportResult {
         (None, rest)
     };
 
+    // Strip fragment (#...) from the end before parsing params/headers
+    let (rest, fragment) = if let Some(hash_pos) = rest.find('#') {
+        let frag = &rest[hash_pos + 1..];
+        let frag = if frag.is_empty() {
+            None
+        } else {
+            Some(frag.to_string())
+        };
+        (&rest[..hash_pos], frag)
+    } else {
+        (rest, None)
+    };
+
     // Parse URI params (after `;`) and headers (after `?`)
     let (params_str, headers_str) = if let Some(rest) = rest.strip_prefix(';') {
         // Split params from headers on `?`
@@ -371,7 +404,7 @@ fn parse_hostport_params_headers(s: &str) -> HostportResult {
         Vec::new()
     };
 
-    Ok((host, port, uri_params, headers))
+    Ok((host, port, uri_params, headers, fragment))
 }
 
 impl fmt::Display for SipUri {
@@ -407,6 +440,11 @@ impl fmt::Display for SipUri {
 
         // Headers
         params::format_headers(&self.headers, f)?;
+
+        // Fragment
+        if let Some(ref frag) = self.fragment {
+            write!(f, "#{frag}")?;
+        }
 
         Ok(())
     }

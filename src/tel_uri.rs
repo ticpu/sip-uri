@@ -13,6 +13,7 @@ use crate::params;
 pub struct TelUri {
     number: String,
     params: Vec<(String, Option<String>)>,
+    fragment: Option<String>,
 }
 
 impl TelUri {
@@ -23,6 +24,7 @@ impl TelUri {
         TelUri {
             number: number.into(),
             params: Vec::new(),
+            fragment: None,
         }
     }
 
@@ -52,6 +54,18 @@ impl TelUri {
     /// Look up a parameter by name (case-insensitive).
     pub fn param(&self, name: &str) -> Option<&Option<String>> {
         params::find_param(&self.params, name)
+    }
+
+    /// The fragment component (after `#`), if present.
+    pub fn fragment(&self) -> Option<&str> {
+        self.fragment
+            .as_deref()
+    }
+
+    /// Set the fragment component.
+    pub fn with_fragment(mut self, fragment: impl Into<String>) -> Self {
+        self.fragment = Some(fragment.into());
+        self
     }
 }
 
@@ -95,6 +109,26 @@ impl FromStr for TelUri {
             (&rest[..semi], Some(&rest[semi + 1..]))
         } else {
             (rest, None)
+        };
+
+        // Strip fragment from the end of params (or number if no params).
+        // `#` is a valid phonedigit-hex so it can appear in the number itself;
+        // the fragment `#` only applies after the params section.
+        let (params_str, fragment) = if let Some(p) = params_str {
+            if let Some(hash_pos) = p.find('#') {
+                let frag = &p[hash_pos + 1..];
+                let frag = if frag.is_empty() {
+                    None
+                } else {
+                    Some(frag.to_string())
+                };
+                (Some(&p[..hash_pos]), frag)
+            } else {
+                (Some(p), None)
+            }
+        } else {
+            // No params — no fragment possible (# in the number is a phonedigit)
+            (None, None)
         };
 
         // Validate number
@@ -150,6 +184,7 @@ impl FromStr for TelUri {
         Ok(TelUri {
             number: number_str.to_string(),
             params,
+            fragment,
         })
     }
 }
@@ -158,6 +193,9 @@ impl fmt::Display for TelUri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "tel:{}", self.number)?;
         params::format_params(&self.params, f)?;
+        if let Some(ref frag) = self.fragment {
+            write!(f, "#{frag}")?;
+        }
         Ok(())
     }
 }
