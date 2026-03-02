@@ -12,6 +12,7 @@ use crate::error::ParseUrnError;
 /// The NSS is stored as-is; percent-encoded hex digits are uppercased for
 /// canonical comparison but the original octets are preserved (never decoded).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct UrnUri {
     nid: String,
     nss: String,

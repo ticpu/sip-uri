@@ -905,6 +905,19 @@ fn builder_sip_uri() {
 }
 
 #[test]
+fn builder_sip_uri_user_param() {
+    let uri = SipUri::new(Host::IPv4(Ipv4Addr::new(198, 51, 100, 1)))
+        .with_user("+15551234567")
+        .with_user_param("cpc", Some("emergency".into()))
+        .with_user_param("oli", Some("0".into()))
+        .with_param("user", Some("phone".into()));
+    assert_eq!(
+        uri.to_string(),
+        "sip:+15551234567;cpc=emergency;oli=0@198.51.100.1;user=phone"
+    );
+}
+
+#[test]
 fn builder_tel_uri() {
     let uri = TelUri::new("+15551234567")
         .with_param("cpc", Some("emergency".into()))
@@ -994,6 +1007,17 @@ fn nameaddr_bare_sip_uri() {
     assert!(na
         .sip_uri()
         .is_some());
+}
+
+#[test]
+fn nameaddr_bare_uri_normalizes_to_angle_brackets() {
+    // Bare URIs are normalized to angle-bracket form on display.
+    // parse(display(parse(x))) == parse(x) holds, but display(parse(x)) != x.
+    let na: NameAddr = "sip:alice@example.com"
+        .parse()
+        .unwrap();
+    assert_eq!(na.to_string(), "<sip:alice@example.com>");
+    roundtrip_nameaddr(&na.to_string());
 }
 
 #[test]

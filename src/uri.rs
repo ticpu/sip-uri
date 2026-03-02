@@ -57,6 +57,38 @@ impl Uri {
         }
     }
 
+    /// Consume and return the inner SIP/SIPS URI, if any.
+    pub fn into_sip(self) -> Option<SipUri> {
+        match self {
+            Uri::Sip(u) => Some(u),
+            _ => None,
+        }
+    }
+
+    /// Consume and return the inner tel: URI, if any.
+    pub fn into_tel(self) -> Option<TelUri> {
+        match self {
+            Uri::Tel(u) => Some(u),
+            _ => None,
+        }
+    }
+
+    /// Consume and return the inner URN, if any.
+    pub fn into_urn(self) -> Option<UrnUri> {
+        match self {
+            Uri::Urn(u) => Some(u),
+            _ => None,
+        }
+    }
+
+    /// Consume and return the raw URI string for an unrecognized scheme.
+    pub fn into_other(self) -> Option<String> {
+        match self {
+            Uri::Other(s) => Some(s),
+            _ => None,
+        }
+    }
+
     /// The scheme of this URI (lowercase).
     pub fn scheme(&self) -> &str {
         match self {
@@ -66,6 +98,7 @@ impl Uri {
             },
             Uri::Tel(_) => "tel",
             Uri::Urn(_) => "urn",
+            // Uri::Other is only constructed by FromStr, which requires ':'
             Uri::Other(s) => s
                 .find(':')
                 .map(|i| &s[..i])

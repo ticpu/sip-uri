@@ -33,6 +33,7 @@ pub struct SipUri {
 
 /// SIP URI scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Scheme {
     /// `sip:` (default port 5060)
     Sip,
@@ -77,9 +78,16 @@ impl SipUri {
         self
     }
 
-    /// Set user-params (parameters within the userinfo, before `@`).
+    /// Replace all user-params (parameters within the userinfo, before `@`).
     pub fn with_user_params(mut self, params: Vec<(String, Option<String>)>) -> Self {
         self.user_params = params;
+        self
+    }
+
+    /// Add a single user-param (parameter within the userinfo, before `@`).
+    pub fn with_user_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
+        self.user_params
+            .push((name.into(), value));
         self
     }
 

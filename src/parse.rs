@@ -92,8 +92,12 @@ pub(crate) fn percent_decode(input: &str, allow_decoded: fn(u8) -> bool) -> Stri
         i += 1;
     }
 
-    // SAFETY: input was valid UTF-8 and we only decoded ASCII-range bytes
-    // or preserved original UTF-8 sequences
+    // SAFETY: All allow_decoded predicates (is_unreserved, is_user_char,
+    // is_paramchar, is_hnv_char, is_password_char) only return true for bytes
+    // in 0x00-0x7F (they call is_ascii_alphanumeric() or match on specific
+    // ASCII literals). Decoded bytes are therefore single-byte valid UTF-8.
+    // Undecoded bytes are copied verbatim from input, which is valid UTF-8
+    // by the &str invariant.
     unsafe { String::from_utf8_unchecked(out) }
 }
 
