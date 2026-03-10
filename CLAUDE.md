@@ -55,6 +55,24 @@ Same as freeswitch-esl-tokio: all public enums and public-field structs get
 - No `assert!/unwrap()` in library code -- same correctness-over-recovery policy
   as freeswitch-esl-tokio
 
+## Scope Boundary
+
+This crate parses **URIs only** — the `addr-spec` and `name-addr`
+productions from RFC 3261 §25. It does NOT handle SIP header field
+grammar.
+
+Anything involving percent-encoded SIP header values (`;tag=`,
+`;serviceurn=`, `;expires=`, `*(SEMI generic-param)` after `>`) belongs
+in a higher-level SIP header parser (e.g., freeswitch-types), not here.
+If a test value contains percent-encoded header-level parameters, that's
+a red flag — it's header grammar leaking into the URI layer.
+
+`NameAddr` must reject trailing content after `>` rather than silently
+discarding it. The caller is responsible for splitting header-level
+params before passing the name-addr portion to this crate.
+
+`NameAddr` is deprecated since 0.2.0 and must be removed in 0.3.0.
+
 ## Character Classes (RFC 3261 §25)
 
 - `unreserved = ALPHA / DIGIT / mark`

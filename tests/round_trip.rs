@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 use sip_uri::{Host, NameAddr, Scheme, SipUri, TelUri, Uri, UrnUri};
 use std::net::{Ipv4Addr, Ipv6Addr};
 

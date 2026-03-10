@@ -14,6 +14,16 @@ use crate::urn_uri::UrnUri;
 /// - `"Display Name" <sip:user@host>`
 /// - `<sip:user@host>`
 /// - `sip:user@host` (bare URI, no display name)
+///
+/// **Deprecated since 0.2.0, will be removed in 0.3.0.**
+/// `name-addr` is SIP header-level grammar, not URI-level.
+/// Use a SIP header parsing crate (e.g., `freeswitch-types`) that also
+/// handles header-level parameters (`;tag=`, `;expires=`, etc.) which
+/// follow the `>` in headers like `From`, `To`, `Contact`, and `Refer-To`.
+#[deprecated(
+    since = "0.2.0",
+    note = "name-addr is header-level grammar; use a SIP header parser (e.g., freeswitch-types) instead"
+)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct NameAddr {
@@ -21,6 +31,7 @@ pub struct NameAddr {
     uri: Uri,
 }
 
+#[allow(deprecated)]
 impl NameAddr {
     /// Create a new NameAddr with the given URI and no display name.
     pub fn new(uri: Uri) -> Self {
@@ -66,6 +77,7 @@ impl NameAddr {
     }
 }
 
+#[allow(deprecated)]
 impl FromStr for NameAddr {
     type Err = ParseNameAddrError;
 
@@ -81,8 +93,9 @@ impl FromStr for NameAddr {
         if s.starts_with('"') {
             let (display_name, rest) = parse_quoted_string(s).map_err(|e| err(&e))?;
             let rest = rest.trim_start();
-            let uri_str = extract_angle_uri(rest)
+            let (uri_str, trailing) = extract_angle_uri(rest)
                 .ok_or_else(|| err("expected '<URI>' after quoted display name"))?;
+            reject_trailing(trailing)?;
             let uri: Uri = uri_str.parse()?;
             let display_name = if display_name.is_empty() {
                 None
@@ -94,7 +107,8 @@ impl FromStr for NameAddr {
 
         // Case 2: <URI> without display name
         if s.starts_with('<') {
-            let uri_str = extract_angle_uri(s).ok_or_else(|| err("unclosed '<'"))?;
+            let (uri_str, trailing) = extract_angle_uri(s).ok_or_else(|| err("unclosed '<'"))?;
+            reject_trailing(trailing)?;
             let uri: Uri = uri_str.parse()?;
             return Ok(NameAddr {
                 display_name: None,
@@ -111,8 +125,9 @@ impl FromStr for NameAddr {
             } else {
                 Some(display_name.to_string())
             };
-            let uri_str =
+            let (uri_str, trailing) =
                 extract_angle_uri(&s[angle_start..]).ok_or_else(|| err("unclosed '<'"))?;
+            reject_trailing(trailing)?;
             let uri: Uri = uri_str.parse()?;
             return Ok(NameAddr { display_name, uri });
         }
@@ -126,11 +141,28 @@ impl FromStr for NameAddr {
     }
 }
 
-/// Extract the URI from between `<` and `>`.
-fn extract_angle_uri(s: &str) -> Option<&str> {
+/// Reject any non-whitespace content after `>`.
+///
+/// Header-level parameters (`;tag=`, `;serviceurn=`, etc.) are part of the
+/// SIP header field grammar, not `name-addr`. Callers must split those off
+/// before parsing.
+fn reject_trailing(s: &str) -> Result<(), ParseNameAddrError> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        Ok(())
+    } else {
+        Err(ParseNameAddrError(format!(
+            "trailing content after '>': \"{trimmed}\" \
+             (header-level parameters belong in SIP header parsing, not name-addr)"
+        )))
+    }
+}
+
+/// Extract the URI from between `<` and `>`, returning (uri, rest_after_`>`).
+fn extract_angle_uri(s: &str) -> Option<(&str, &str)> {
     let s = s.strip_prefix('<')?;
     let end = s.find('>')?;
-    Some(&s[..end])
+    Some((&s[..end], &s[end + 1..]))
 }
 
 /// Parse a quoted string and return (unescaped content, rest of input after closing quote).
@@ -163,6 +195,7 @@ fn parse_quoted_string(s: &str) -> Result<(String, &str), String> {
     Err("unterminated quoted string".into())
 }
 
+#[allow(deprecated)]
 impl fmt::Display for NameAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self
@@ -211,6 +244,7 @@ fn escape_display_name(name: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 
@@ -244,6 +278,37 @@ mod tests {
         assert!(na
             .sip_uri()
             .is_some());
+    }
+
+    #[test]
+    fn reject_trailing_params_after_angle_bracket() {
+        let cases = [
+            "<sip:user@example.com>;tag=abc123",
+            "<sip:user@example.com>;expires=3600;foo=bar",
+            "<sip:user@example.com> trailing",
+        ];
+        for input in cases {
+            assert!(
+                input
+                    .parse::<NameAddr>()
+                    .is_err(),
+                "should reject trailing content: {input}",
+            );
+        }
+    }
+
+    #[test]
+    fn reject_trailing_params_after_quoted_name() {
+        assert!(r#""Alice" <sip:alice@example.com>;expires=3600"#
+            .parse::<NameAddr>()
+            .is_err());
+    }
+
+    #[test]
+    fn reject_trailing_params_after_unquoted_name() {
+        assert!("Alice <sip:alice@example.com>;tag=xyz"
+            .parse::<NameAddr>()
+            .is_err());
     }
 
     #[test]

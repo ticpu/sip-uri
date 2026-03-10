@@ -7,7 +7,7 @@
 //! # Examples
 //!
 //! ```
-//! use sip_uri::{SipUri, TelUri, UrnUri, Uri, NameAddr};
+//! use sip_uri::{SipUri, TelUri, UrnUri, Uri};
 //!
 //! // Parse a SIP URI
 //! let uri: SipUri = "sip:alice@example.com;transport=tcp".parse().unwrap();
@@ -23,10 +23,6 @@
 //! let urn: UrnUri = "urn:service:sos".parse().unwrap();
 //! assert_eq!(urn.nid(), "service");
 //! assert_eq!(urn.nss(), "sos");
-//!
-//! // Parse a name-addr (display name + URI)
-//! let na: NameAddr = r#""Alice" <sip:alice@example.com>"#.parse().unwrap();
-//! assert_eq!(na.display_name(), Some("Alice"));
 //!
 //! // Dispatch on URI type
 //! let uri: Uri = "urn:service:sos".parse().unwrap();
@@ -53,6 +49,7 @@ pub use error::{
     ParseNameAddrError, ParseSipUriError, ParseTelUriError, ParseUriError, ParseUrnError,
 };
 pub use host::Host;
+#[allow(deprecated)]
 pub use name_addr::NameAddr;
 pub use sip_uri::{Scheme, SipUri};
 pub use tel_uri::TelUri;
