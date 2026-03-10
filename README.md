@@ -7,7 +7,7 @@ RFC 8141 (URN) with hand-written parsing and per-component
 percent-encoding.
 
 ```rust
-use sip_uri::{SipUri, TelUri, UrnUri, Uri, NameAddr};
+use sip_uri::{SipUri, TelUri, UrnUri, Uri};
 
 let uri: SipUri = "sip:alice@example.com;transport=tcp".parse().unwrap();
 assert_eq!(uri.user(), Some("alice"));
@@ -21,14 +21,11 @@ assert!(tel.is_global());
 let urn: UrnUri = "urn:service:sos".parse().unwrap();
 assert_eq!(urn.nid(), "service");
 assert_eq!(urn.nss(), "sos");
-
-let na: NameAddr = r#""Alice" <sip:alice@example.com>"#.parse().unwrap();
-assert_eq!(na.display_name(), Some("Alice"));
 ```
 
 ```toml
 [dependencies]
-sip-uri = "0.1"
+sip-uri = "0.2"
 ```
 
 ## Types
@@ -39,7 +36,7 @@ sip-uri = "0.1"
 | `TelUri` | tel: URI with number, params, fragment |
 | `UrnUri` | URN with NID, NSS, and optional r/q/f components |
 | `Uri` | Enum dispatching `Sip` / `Tel` / `Urn` / `Other` based on scheme |
-| `NameAddr` | Display name + URI (`"Alice" <sip:...>`) |
+| `NameAddr` | *Deprecated* -- display name + URI (`"Alice" <sip:...>`), will be removed in 0.3.0 |
 | `Host` | IPv4, IPv6, or hostname |
 | `Scheme` | `Sip` or `Sips` |
 
@@ -146,28 +143,13 @@ NID is validated per RFC 8141 (2-32 chars, alphanum bookends) and stored
 lowercase. NSS percent-encoding hex digits are uppercased for canonical
 comparison but never decoded.
 
-## NameAddr
+## NameAddr (deprecated)
 
-Parses RFC 3261 name-addr format with optional display name and
-angle-bracketed URI:
-
-```rust
-use sip_uri::NameAddr;
-
-// Quoted display name
-let na: NameAddr = r#""EXAMPLE CO" <sip:+15551234567@198.51.100.1;user=phone>"#
-    .parse().unwrap();
-assert_eq!(na.display_name(), Some("EXAMPLE CO"));
-assert!(na.sip_uri().is_some());
-
-// Bare URI (no angle brackets)
-let na: NameAddr = "sip:alice@example.com".parse().unwrap();
-assert!(na.display_name().is_none());
-
-// tel: URI in angle brackets
-let na: NameAddr = "<tel:+15551234567;cpc=emergency>".parse().unwrap();
-assert!(na.tel_uri().is_some());
-```
+`NameAddr` is deprecated since 0.2.0 and will be removed in 0.3.0.
+`name-addr` is SIP header-level grammar, not URI-level. Header-level
+parameter parsing (`;tag=`, `;expires=`, `;serviceurn=`, etc.) belongs in
+a SIP header parser such as
+[freeswitch-types](https://crates.io/crates/freeswitch-types).
 
 ## Percent-encoding
 
