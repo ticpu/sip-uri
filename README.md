@@ -146,10 +146,19 @@ comparison but never decoded.
 ## NameAddr (deprecated)
 
 `NameAddr` is deprecated since 0.2.0 and will be removed in 0.3.0.
-`name-addr` is SIP header-level grammar, not URI-level. Header-level
-parameter parsing (`;tag=`, `;expires=`, `;serviceurn=`, etc.) belongs in
-a SIP header parser such as
-[freeswitch-types](https://crates.io/crates/freeswitch-types).
+
+The `name-addr` production (RFC 3261 §25.1) appears inside SIP header
+fields where it is followed by header-level parameters (`;tag=`,
+`;expires=`, `;serviceurn=`, etc.). This type rejects those parameters,
+so it cannot round-trip real SIP header values.
+
+**Migration:**
+
+- For SIP header parsing (From, To, Contact, Refer-To), use
+  [`SipHeaderAddr`](https://docs.rs/freeswitch-types/latest/freeswitch_types/struct.SipHeaderAddr.html)
+  from [`freeswitch-types`](https://crates.io/crates/freeswitch-types),
+  which handles display names, URIs, and header-level parameters.
+- If you only need the URI, parse it directly with `Uri`.
 
 ## Percent-encoding
 

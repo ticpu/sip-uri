@@ -16,13 +16,23 @@ use crate::urn_uri::UrnUri;
 /// - `sip:user@host` (bare URI, no display name)
 ///
 /// **Deprecated since 0.2.0, will be removed in 0.3.0.**
-/// `name-addr` is SIP header-level grammar, not URI-level.
-/// Use a SIP header parsing crate (e.g., `freeswitch-types`) that also
-/// handles header-level parameters (`;tag=`, `;expires=`, etc.) which
-/// follow the `>` in headers like `From`, `To`, `Contact`, and `Refer-To`.
+///
+/// The `name-addr` production (RFC 3261 §25.1) appears inside SIP header
+/// fields like `From`, `To`, `Contact`, and `Refer-To`, where it is
+/// followed by header-level parameters (`;tag=`, `;expires=`, etc.).
+/// This type rejects those parameters, so it cannot round-trip real SIP
+/// header values.
+///
+/// # Migration
+///
+/// - **Full SIP header parsing**: use
+///   [`SipHeaderAddr`](https://docs.rs/freeswitch-types/latest/freeswitch_types/struct.SipHeaderAddr.html)
+///   from the [`freeswitch-types`](https://crates.io/crates/freeswitch-types)
+///   crate, which handles display names, URIs, and header-level parameters.
+/// - **URI only**: parse directly with [`Uri`](crate::Uri).
 #[deprecated(
     since = "0.2.0",
-    note = "name-addr is header-level grammar; use a SIP header parser (e.g., freeswitch-types) instead"
+    note = "name-addr is header-level grammar; use freeswitch_types::SipHeaderAddr or parse the URI with sip_uri::Uri directly"
 )]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
