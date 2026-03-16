@@ -26,13 +26,13 @@ use crate::urn_uri::UrnUri;
 /// # Migration
 ///
 /// - **Full SIP header parsing**: use
-///   [`SipHeaderAddr`](https://docs.rs/freeswitch-types/latest/freeswitch_types/struct.SipHeaderAddr.html)
-///   from the [`freeswitch-types`](https://crates.io/crates/freeswitch-types)
+///   [`SipHeaderAddr`](https://docs.rs/sip-header/latest/sip_header/struct.SipHeaderAddr.html)
+///   from the [`sip-header`](https://crates.io/crates/sip-header)
 ///   crate, which handles display names, URIs, and header-level parameters.
 /// - **URI only**: parse directly with [`Uri`](crate::Uri).
 #[deprecated(
     since = "0.2.0",
-    note = "name-addr is header-level grammar; use freeswitch_types::SipHeaderAddr or parse the URI with sip_uri::Uri directly"
+    note = "name-addr is header-level grammar; use sip_header::SipHeaderAddr or parse the URI with sip_uri::Uri directly"
 )]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
