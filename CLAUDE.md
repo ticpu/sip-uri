@@ -63,7 +63,7 @@ grammar.
 
 Anything involving percent-encoded SIP header values (`;tag=`,
 `;serviceurn=`, `;expires=`, `*(SEMI generic-param)` after `>`) belongs
-in a higher-level SIP header parser (e.g., freeswitch-types), not here.
+in a higher-level SIP header parser (e.g., sip-header), not here.
 If a test value contains percent-encoded header-level parameters, that's
 a red flag — it's header grammar leaking into the URI layer.
 

@@ -155,8 +155,8 @@ so it cannot round-trip real SIP header values.
 **Migration:**
 
 - For SIP header parsing (From, To, Contact, Refer-To), use
-  [`SipHeaderAddr`](https://docs.rs/freeswitch-types/latest/freeswitch_types/struct.SipHeaderAddr.html)
-  from [`freeswitch-types`](https://crates.io/crates/freeswitch-types),
+  [`SipHeaderAddr`](https://docs.rs/sip-header/latest/sip_header/struct.SipHeaderAddr.html)
+  from [`sip-header`](https://crates.io/crates/sip-header),
   which handles display names, URIs, and header-level parameters.
 - If you only need the URI, parse it directly with `Uri`.
 
