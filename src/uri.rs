@@ -105,6 +105,19 @@ impl Uri {
                 .unwrap_or(s),
         }
     }
+
+    /// Extract the user/subscriber identifier from the URI.
+    ///
+    /// - `sip:`/`sips:` → user part before `@`
+    /// - `tel:` → phone number (the dialable identifier)
+    /// - `urn:` / other → `None`
+    pub fn user(&self) -> Option<&str> {
+        match self {
+            Uri::Sip(u) => u.user(),
+            Uri::Tel(u) => Some(u.number()),
+            Uri::Urn(_) | Uri::Other(_) => None,
+        }
+    }
 }
 
 impl From<SipUri> for Uri {
@@ -295,5 +308,45 @@ mod tests {
         assert!(uri
             .as_urn()
             .is_some());
+    }
+
+    #[test]
+    fn user_sip() {
+        let uri: Uri = "sip:alice@example.com"
+            .parse()
+            .unwrap();
+        assert_eq!(uri.user(), Some("alice"));
+    }
+
+    #[test]
+    fn user_sip_no_user() {
+        let uri: Uri = "sip:example.com"
+            .parse()
+            .unwrap();
+        assert_eq!(uri.user(), None);
+    }
+
+    #[test]
+    fn user_tel() {
+        let uri: Uri = "tel:+15551234567"
+            .parse()
+            .unwrap();
+        assert_eq!(uri.user(), Some("+15551234567"));
+    }
+
+    #[test]
+    fn user_urn() {
+        let uri: Uri = "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+            .parse()
+            .unwrap();
+        assert_eq!(uri.user(), None);
+    }
+
+    #[test]
+    fn user_other() {
+        let uri: Uri = "http://example.com"
+            .parse()
+            .unwrap();
+        assert_eq!(uri.user(), None);
     }
 }
