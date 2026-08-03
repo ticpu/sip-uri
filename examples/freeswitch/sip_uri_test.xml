@@ -1,0 +1,33 @@
+<include>
+
+  <!-- Harness for test-live.sh. Reads the URI from ${test_uri}, leaves the
+       parsed components on the channel, and parks so the test can read them
+       back with uuid_getvar. -->
+
+  <context name="sip_uri_test">
+    <extension name="parse">
+      <condition field="${destination_number}" expression="^parse$" break="on-false"/>
+
+      <condition break="never">
+        <action application="multiset" inline="true"
+                data="^^|${spawn_stream($${conf_dir}/bin/fs-sip-uri vars uri_ ${test_uri})}"/>
+      </condition>
+
+      <condition field="${spawn_stream($${conf_dir}/bin/fs-sip-uri get user ${test_uri})}"
+                 expression="^(.+)$" break="never">
+        <action application="set" data="inline_user=$1" inline="true"/>
+      </condition>
+
+      <condition field="${spawn_stream($${conf_dir}/bin/fs-sip-uri get param.participantid ${test_uri})}"
+                 expression="^(.+)$" break="never">
+        <action application="set" data="inline_participantid=$1" inline="true"/>
+      </condition>
+
+      <condition>
+        <action application="answer"/>
+        <action application="park"/>
+      </condition>
+    </extension>
+  </context>
+
+</include>

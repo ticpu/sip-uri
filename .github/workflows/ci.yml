@@ -17,6 +17,8 @@ jobs:
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-unknown-linux-musl
 
     - name: Cache cargo
       uses: actions/cache@v4
@@ -46,4 +48,14 @@ jobs:
         echo "TEST_PASSED=$passed" >> "$GITHUB_ENV"
 
     - name: Build
-      run: cargo build --release
+      run: cargo build --release --all-targets
+
+    # The static build is how fs-sip-uri actually ships, so break here rather
+    # than at deploy time.
+    - name: Build fs-sip-uri for musl
+      run: |
+        cargo build --release --target x86_64-unknown-linux-musl --example fs-sip-uri
+        bin=target/x86_64-unknown-linux-musl/release/examples/fs-sip-uri
+        file "$bin" | grep -q static
+        "$bin" --version
+        test "$("$bin" get param.participantid 'sip:sip.example.com;participantid=2')" = 2

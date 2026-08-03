@@ -200,6 +200,19 @@ assert_eq!(uri.user(), Some(r#"%22foo%22"#));
 - **RFC 3966** -- tel-URI (global/local numbers, visual separators, parameters)
 - **RFC 8141** -- URN syntax (NID, NSS, r/q/f components)
 
+## Examples
+
+`fs-sip-uri` lets a FreeSWITCH XML dialplan parse a URI properly instead of
+applying regexes to a header value. See
+[examples/freeswitch/README.md](examples/freeswitch/README.md) for the dialplan
+syntax, field list and error contract. Build it statically so it runs under
+whatever userspace FreeSWITCH itself runs under:
+
+```sh
+rustup target add x86_64-unknown-linux-musl
+cargo build --release --target x86_64-unknown-linux-musl --example fs-sip-uri
+```
+
 ## Development
 
 ```sh
