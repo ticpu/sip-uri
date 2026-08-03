@@ -1,0 +1,73 @@
+<!-- Worked example: parse an inbound URI header once, refuse to route on a
+     parse failure, then branch on what came back. The bridges are
+     illustrative; the parse, the guard and the branch are the parts to copy. -->
+
+<!-- Belongs in vars.xml. FreeSWITCH substitutes $${fs_sip_uri} at XML parse
+     time, so every dialplan below reads as one call rather than a path. -->
+<X-PRE-PROCESS cmd="set" data="fs_sip_uri=$${conf_dir}/bin/fs-sip-uri"/>
+
+<include>
+
+  <context name="example">
+
+    <extension name="parse_caller_id" continue="true">
+      <condition field="${sip_h_X-Caller-Id-Number}" expression="^.+$" break="on-false"/>
+
+      <!-- Both inline, so the components exist before the next condition is
+           evaluated, and so the clear happens before the set rather than after
+           it at execute time. -->
+      <condition break="never">
+        <action application="multiunset" data="${uri_keys}" inline="true"/>
+        <action application="multiset" inline="true"
+                data="^^|${spawn_stream($${fs_sip_uri} vars uri_ ${sip_h_X-Caller-Id-Number})}"/>
+      </condition>
+
+      <!-- The error contract, applied. An unparsable URI and a failed binary
+           both emit nothing, so uri_type is unset in either case; fs-sip-uri
+           has already logged a WARNING naming the command and the reason.
+           Refuse the call here rather than routing on components we do not
+           have -- an empty ${uri_user} would otherwise dial ${uri_host} alone
+           and reach the wrong endpoint. -->
+      <condition field="${uri_type}" expression="^$" break="on-true">
+        <action application="log" data="ERR unparsable X-Caller-Id-Number: ${sip_h_X-Caller-Id-Number}"/>
+        <action application="hangup" data="NORMAL_UNSPECIFIED"/>
+      </condition>
+    </extension>
+
+    <extension name="route_caller">
+      <condition field="${destination_number}" expression="^route$" break="on-false"/>
+
+      <!-- No user-part: an endpoint URI addressed to the host itself. Reached
+           only when the parse succeeded, so this is a real absence rather
+           than a failure. -->
+      <condition field="${uri_user}" expression="^$" break="on-true">
+        <action application="bridge" data="sofia/external/sip:${uri_host}"/>
+      </condition>
+
+      <condition>
+        <action application="bridge" data="sofia/external/sip:${uri_user}@${uri_host}"/>
+      </condition>
+    </extension>
+
+    <!-- One-off lookup, where putting every component on the channel would be
+         more than the question needs. -->
+    <extension name="reject_non_tel">
+      <condition field="${destination_number}" expression="^tel_only$" break="on-false"/>
+
+      <!-- Match the failure, not the success: anything that is not exactly
+           "tel", which includes the empty string a parse failure produces. -->
+      <condition field="${spawn_stream($${fs_sip_uri} get type ${sip_h_X-Caller-Id-Number})}"
+                 expression="^(?!tel$).*$" break="on-true">
+        <action application="log" data="ERR expected a tel: URI"/>
+        <action application="hangup" data="CALL_REJECTED"/>
+      </condition>
+
+      <condition field="${spawn_stream($${fs_sip_uri} get user ${sip_h_X-Caller-Id-Number})}"
+                 expression="^(.+)$" break="never">
+        <action application="bridge" data="sofia/external/sip:$1@pstn.example.com"/>
+      </condition>
+    </extension>
+
+  </context>
+
+</include>
