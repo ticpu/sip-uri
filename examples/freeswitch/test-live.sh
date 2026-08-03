@@ -13,6 +13,7 @@ FS_CLI=${FS_CLI:-fs_cli -P 8022}
 CONF_DIR=${CONF_DIR:-$($FS_CLI -x 'global_getvar conf_dir')}
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 TARGET=${TARGET:-x86_64-unknown-linux-musl}
+PROFILE=${PROFILE:-release-min}
 
 fail=0
 
@@ -74,8 +75,8 @@ check() {
 }
 
 echo "== build"
-cargo build --release --manifest-path "$REPO/Cargo.toml" --target "$TARGET" --example fs-sip-uri || exit 1
-install -Dm0755 "$REPO/target/$TARGET/release/examples/fs-sip-uri" "$FS_CONF/bin/fs-sip-uri" || exit 1
+cargo build --profile "$PROFILE" --manifest-path "$REPO/Cargo.toml" --target "$TARGET" --example fs-sip-uri || exit 1
+install -Dm0755 "$REPO/target/$TARGET/$PROFILE/examples/fs-sip-uri" "$FS_CONF/bin/fs-sip-uri" || exit 1
 install -Dm0644 "$(dirname "$0")/sip_uri_test.xml" "$FS_CONF/dialplan/sip_uri_test.xml" || exit 1
 api reloadxml >/dev/null
 # The default sessions-per-second ceiling throttles a run of back-to-back

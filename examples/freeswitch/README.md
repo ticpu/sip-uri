@@ -14,10 +14,14 @@ The binary must run under whatever userspace FreeSWITCH itself runs under —
 often a container image built elsewhere — so link it statically:
 
 ```sh
-cargo build --release --target x86_64-unknown-linux-musl --example fs-sip-uri
-install -Dm0755 target/x86_64-unknown-linux-musl/release/examples/fs-sip-uri \
+cargo build --profile release-min --target x86_64-unknown-linux-musl --example fs-sip-uri
+install -Dm0755 target/x86_64-unknown-linux-musl/release-min/examples/fs-sip-uri \
         /etc/freeswitch/bin/fs-sip-uri
 ```
+
+The `release-min` profile is size-tuned (`opt-level = "z"`, fat LTO, one codegen
+unit, `panic = "abort"`, stripped), which roughly halves the static binary. A
+plain `--release` build works too and is faster to produce.
 
 Reference it as `$${conf_dir}/bin/fs-sip-uri` and the same dialplan works in
 every deployment, since `conf_dir` resolves to the config tree wherever it is
@@ -90,14 +94,18 @@ the name-addr before calling this.
 ## Error contract
 
 Failures print nothing on stdout, write one line to stderr, and exit non-zero:
-1 for an unparsable URI, 2 for a field name that does not exist. FreeSWITCH
-logs the child's stderr and its exit status, both naming the full command:
+1 for an unparsable URI or a payload `vars` refused to emit, 2 for a field name
+that does not exist. FreeSWITCH logs the child's stderr and its exit status,
+both naming the full command:
 
 ```
 [WARNING] switch_core.c:3481 STDERR of cmd (…/fs-sip-uri get user garbage-not-a-uri):
           fs-sip-uri: cannot parse "garbage-not-a-uri": invalid URI: missing scheme
 [WARNING] switch_core.c:3494 Exit status (256): …/fs-sip-uri get user garbage-not-a-uri
 ```
+
+That status is the raw `waitpid` value rather than the exit code, so exit 1
+logs as 256 and exit 2 as 512.
 
 Nothing is logged on success. Because every failure mode expands to an empty
 string, guard the dialplan explicitly rather than letting an unparsed header

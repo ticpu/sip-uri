@@ -210,7 +210,7 @@ whatever userspace FreeSWITCH itself runs under:
 
 ```sh
 rustup target add x86_64-unknown-linux-musl
-cargo build --release --target x86_64-unknown-linux-musl --example fs-sip-uri
+cargo build --profile release-min --target x86_64-unknown-linux-musl --example fs-sip-uri
 ```
 
 ## Development

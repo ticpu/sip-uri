@@ -16,4 +16,12 @@ exclude = ["CLAUDE.md", "hooks/"]
 [dependencies]
 
 [dev-dependencies]
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", default-features = false, features = ["std", "help", "usage", "error-context", "derive"] }
+
+[profile.release-min]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
