@@ -278,6 +278,62 @@ fn ng911_participantid() {
 }
 
 #[test]
+fn ng911_participantid_no_user_part() {
+    let uri: SipUri = "sip:sip.bcf.qc.core.ng.example.com;participantid=2"
+        .parse()
+        .unwrap();
+    assert_eq!(uri.user(), None);
+    assert_eq!(
+        uri.host(),
+        &Host::Hostname("sip.bcf.qc.core.ng.example.com".into())
+    );
+    assert_eq!(uri.param("participantid"), Some(&Some("2".into())));
+    assert_eq!(
+        uri.to_string(),
+        "sip:sip.bcf.qc.core.ng.example.com;participantid=2"
+    );
+}
+
+#[test]
+fn ng911_participantid_no_user_part_extra_params() {
+    let uri: SipUri = "sip:sip.bcf.qc.core.ng.example.com;participantid=2;user=phone"
+        .parse()
+        .unwrap();
+    assert_eq!(uri.user(), None);
+    assert_eq!(uri.param("participantid"), Some(&Some("2".into())));
+    assert_eq!(uri.param("user"), Some(&Some("phone".into())));
+}
+
+#[test]
+fn ng911_participantid_non_word_value() {
+    let uri: SipUri = "sip:sip.bcf.qc.core.ng.example.com;participantid=9f8e7d6c-1234"
+        .parse()
+        .unwrap();
+    assert_eq!(
+        uri.param("participantid"),
+        Some(&Some("9f8e7d6c-1234".into()))
+    );
+}
+
+// Appending `@host` to a host-only URI yields a valid URI whose user part is a
+// domain name and whose participantid became a user-param: nothing rejects it
+// locally, the 404 only shows up on the wire.
+#[test]
+fn ng911_participantid_host_reused_as_user() {
+    let uri: SipUri =
+        "sip:sip.bcf.qc.core.ng.example.com;participantid=2@sip.bcf.qc.core.ng.example.com"
+            .parse()
+            .unwrap();
+    assert_eq!(uri.user(), Some("sip.bcf.qc.core.ng.example.com"));
+    assert_eq!(
+        uri.user_params(),
+        &[("participantid".into(), Some("2".into()))]
+    );
+    assert_eq!(uri.params(), &[]);
+    assert_eq!(uri.param("participantid"), None);
+}
+
+#[test]
 fn ng911_angle_brackets_user_phone() {
     let na: NameAddr = "<sip:1305@pbx.example.com;user=phone>"
         .parse()
