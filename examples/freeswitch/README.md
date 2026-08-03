@@ -85,6 +85,30 @@ fs-sip-uri: user contains '|', refusing to emit a payload
 `multiset` splits each pair on its *first* `=`, so a value containing `=`
 round-trips correctly.
 
+### Clear the previous parse
+
+Absent components are not emitted, so reusing a prefix would leave the earlier
+parse's values in place for anything the new URI lacks — parsing
+`sip:+15551234567@first.example.com` and then `sip:second.example.com` into the
+same prefix would update `uri_host` while `uri_user` still held
+`+15551234567`, a number belonging to the other URI. The same channel survives
+`transfer` and `execute_extension`, so a sub-dialplan or a Lua script parsing a
+second URI lands in the same namespace.
+
+Each payload therefore ends with `<prefix>keys`, listing every variable it
+sets, space-separated because that is `multiunset`'s default delimiter. Clear
+before you set:
+
+```xml
+<action application="multiunset" data="${uri_keys}"/>
+<action application="multiset"
+        data="^^|${spawn_stream($${conf_dir}/bin/fs-sip-uri vars uri_ ${some_uri})}"/>
+```
+
+On the first parse `${uri_keys}` is empty and `multiunset` is a silent no-op,
+so the pair is safe to use unconditionally. Separate processes cannot interfere
+with each other; this flat namespace is the only shared thing here.
+
 ## Angle brackets
 
 A bare `<sip:...>` wrapper is stripped. A display name or trailing header

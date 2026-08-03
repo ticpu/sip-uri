@@ -16,6 +16,8 @@ TARGET=${TARGET:-x86_64-unknown-linux-musl}
 PROFILE=${PROFILE:-release-min}
 
 fail=0
+# Extension in sip_uri_test.xml that probe() routes to.
+EXTEN=parse
 
 api() { $FS_CLI -x "$*"; }
 
@@ -25,7 +27,7 @@ probe() {
 	local uri=$1 leg dump
 	shift
 	drain
-	$FS_CLI -x "originate {test_uri=$uri}loopback/parse/sip_uri_test &sleep(20000)" >/dev/null 2>&1 &
+	$FS_CLI -x "originate {test_uri=$uri}loopback/$EXTEN/sip_uri_test &sleep(20000)" >/dev/null 2>&1 &
 	for _ in $(seq 40); do
 		leg=$(api 'show channels as json' | jq -r '.rows[]? | select(.name|endswith("-b")) | .uuid' | head -1)
 		[ -n "$leg" ] && break
@@ -140,6 +142,15 @@ check 'garbage-not-a-uri' uri_type=_undef_ uri_host=_undef_ inline_user=_undef_
 
 # A raw delimiter in a component aborts the payload rather than corrupting it.
 check 'sip:a|b@host.example.com' uri_type=_undef_ inline_user='a|b'
+
+# The first parse sets user, password, port and a param the second URI lacks;
+# multiunset must leave none of them readable.
+echo "== reparse clears the previous parse"
+EXTEN=reparse
+check 'sip:second.example.com;participantid=2' \
+	uri_host=second.example.com uri_param_participantid=2 \
+	uri_user=_undef_ uri_password=_undef_ uri_port=_undef_ uri_param_first=_undef_
+EXTEN=parse
 
 echo
 [ $fail -eq 0 ] && echo "all passed" || echo "FAILURES"

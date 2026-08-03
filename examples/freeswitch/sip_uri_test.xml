@@ -28,6 +28,29 @@
         <action application="park"/>
       </condition>
     </extension>
+
+    <!-- Parses a URI that has every component, then ${test_uri}, into the same
+         prefix. Nothing from the first parse may survive into the second. -->
+    <extension name="reparse">
+      <condition field="${destination_number}" expression="^reparse$" break="on-false"/>
+
+      <condition break="never">
+        <action application="multiunset" data="${uri_keys}"/>
+        <action application="multiset"
+                data="^^|${spawn_stream($${conf_dir}/bin/fs-sip-uri vars uri_ sip:+15551234567:secret@first.example.com:5080;first=1)}"/>
+      </condition>
+
+      <condition break="never">
+        <action application="multiunset" data="${uri_keys}"/>
+        <action application="multiset"
+                data="^^|${spawn_stream($${conf_dir}/bin/fs-sip-uri vars uri_ ${test_uri})}"/>
+      </condition>
+
+      <condition>
+        <action application="answer"/>
+        <action application="park"/>
+      </condition>
+    </extension>
   </context>
 
 </include>

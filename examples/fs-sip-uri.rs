@@ -24,6 +24,11 @@ use sip_uri::{SipUri, Uri};
 /// character is safe by construction.
 const DELIM: char = '|';
 
+/// Name of the variable listing everything a `vars` payload sets. Space-
+/// separated, which is `multiunset`'s own default delimiter and survives being
+/// carried inside a `DELIM`-separated payload.
+const KEYS: &str = "keys";
+
 /// Field lookup failed in a way the dialplan author must fix, as opposed to a
 /// field that is simply absent from this URI.
 const EXIT_BAD_FIELD: u8 = 2;
@@ -91,7 +96,7 @@ fn main() -> ExitCode {
             }
         },
         Cmd::Vars { prefix, .. } => {
-            let pairs = vars(&uri);
+            let mut pairs = vars(&uri);
             if let Some((name, _)) = pairs
                 .iter()
                 .find(|(n, v)| n.contains(DELIM) || v.contains(DELIM))
@@ -99,6 +104,24 @@ fn main() -> ExitCode {
                 eprintln!("fs-sip-uri: {name} contains {DELIM:?}, refusing to emit a payload");
                 return ExitCode::FAILURE;
             }
+            if let Some((name, _)) = pairs
+                .iter()
+                .find(|(n, _)| n.contains(char::is_whitespace))
+            {
+                eprintln!("fs-sip-uri: {name} contains whitespace, refusing to emit a payload");
+                return ExitCode::FAILURE;
+            }
+
+            // Every name this payload sets, space-separated for `multiunset`,
+            // so the next parse can clear the previous one instead of
+            // inheriting whatever components it happens not to have.
+            let mut names: Vec<String> = pairs
+                .iter()
+                .map(|(name, _)| format!("{prefix}{name}"))
+                .collect();
+            names.push(format!("{prefix}{KEYS}"));
+            pairs.push((KEYS.to_string(), names.join(" ")));
+
             let payload: Vec<String> = pairs
                 .iter()
                 .map(|(name, value)| format!("{prefix}{name}={value}"))
