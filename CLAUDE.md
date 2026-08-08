@@ -75,25 +75,8 @@ params before passing the name-addr portion to this crate.
 
 ## Release Workflow
 
-### Pre-release checks
-
-```sh
-cargo fmt --all
-cargo clippy --release -- -D warnings
-cargo test --release
-cargo build --release
-cargo semver-checks check-release
-cargo publish --dry-run
-```
-
-### Publish
-
-**Never `cargo publish` without completing these steps first:**
-
-1. Create signed annotated tags (`git tag -as`)
-2. Push the tags (`git push --tags`)
-3. Wait for CI to pass on the tagged commit
-4. Only then `cargo publish`
+Use `/release` (`.claude/commands/release.md`) — it owns the pre-release
+checks, changelog, tagging, and publish steps. Do not duplicate them here.
 
 ## Character Classes (RFC 3261 §25)
 
