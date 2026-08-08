@@ -13,26 +13,17 @@ Optional override: $ARGUMENTS (format: vX.Y.Z). If provided, use that version.
      behavior changes. Stop and confirm before proceeding. 0.3.0 is reserved
      for the `NameAddr` removal.
 
-## Pre-release checks
-
-Run in sequence — stop and report on any failure:
-
-```sh
-cargo fmt --all
-cargo clippy --all-targets -- -D warnings
-RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" cargo doc --no-deps
-cargo test --release
-cargo semver-checks check-release
-cargo publish --dry-run
-```
-
 ## Steps
 
-1. Bump `version` in `Cargo.toml`.
+1. Pre-release checks — stop and report on any failure:
 
-2. Run pre-release checks above.
+```sh
+scripts/release-check.sh
+```
 
-3. Draft a changelog from `git log --oneline <last-tag>..HEAD`.
+2. Draft a changelog from `git log --oneline <last-tag>..HEAD` and write it to
+   `scratch/changelog-vX.Y.Z.txt` (gitignored; not part of the published
+   package).
 
    **Rules:**
    - Group under: `New features:`, `Bug fixes:`, `Build:`, `Refactoring:` — omit empty sections.
@@ -40,7 +31,7 @@ cargo publish --dry-run
    - Merge related commits for the same feature into one bullet.
    - No git hashes, no raw commit subjects, no co-author lines.
 
-   Tag annotation format:
+   File format (becomes the tag annotation verbatim):
    ```
    vX.Y.Z
 
@@ -54,36 +45,19 @@ cargo publish --dry-run
    - what changed
    ```
 
-4. Commit the bump and build the tag locally — nothing is pushed yet. The tag
-   sits on a detached child commit that pins `Cargo.lock`, so the lock never
-   lands on master while the released build still resolves an exact
-   dependency set:
+3. Bump, commit, and tag:
 
 ```sh
-git add Cargo.toml
-git commit -m "release: vX.Y.Z"
-git checkout --detach
-git add -f Cargo.lock
-git commit -m "build: pin Cargo.lock for vX.Y.Z"
-git tag -as vX.Y.Z -m "$(cat <<'EOF'
-vX.Y.Z
-
-<changelog>
-EOF
-)"
-git switch master
+scripts/release-tag.sh vX.Y.Z scratch/changelog-vX.Y.Z.txt
 ```
 
-   Run these as **separate** commands, never chained with `&&`. If a chained
-   command is rejected part-way — a hook, a denied permission — the untried
-   half is silently skipped, and the failure mode here is committing
-   `Cargo.lock` onto master because the `git checkout --detach` never ran.
-   After `git checkout --detach`, confirm with `git symbolic-ref -q HEAD`
-   (it must fail) before staging the lock. The `pre-commit` hook rejects a
-   staged `Cargo.lock` on a branch and `pre-push` rejects a branch tip that
-   tracks it, but neither replaces checking that the detach took.
+   Bumps `Cargo.toml`, commits `release: vX.Y.Z`, detaches HEAD, pins
+   `Cargo.lock` on that detached commit (`build: pin Cargo.lock for vX.Y.Z`),
+   signs the tag from the changelog file, and returns to the branch. Refuses
+   to run on a dirty tree, off master, or if the tag already exists. Nothing
+   is pushed yet.
 
-5. Push master, wait for CI green:
+4. Push master, wait for CI green:
 
 ```sh
 git push
@@ -94,9 +68,10 @@ gh run watch "$(gh run list --workflow=ci.yml -b master -L1 --json databaseId --
    `https://www.githubstatus.com/api/v2/components.json` — during an outage no
    run is created and missed events are never backfilled. Stop and report.
 
-   Red: fix on master, rebuild the tag onto the new head, restart this step.
+   Red: fix on master, delete the local tag (`git tag -d vX.Y.Z`), rebuild it
+   with `scripts/release-tag.sh` onto the new head, restart this step.
 
-6. Push the tag:
+5. Push the tag:
 
 ```sh
 git push origin vX.Y.Z
@@ -105,18 +80,16 @@ git push origin vX.Y.Z
    The tag is IMMUTABLE once pushed — never retag. Wrong? Make a new patch
    release.
 
-7. Publish, from the tagged commit:
+6. Publish:
 
 ```sh
-git checkout vX.Y.Z
-cargo publish
-git switch master
+scripts/release-publish.sh vX.Y.Z
 ```
 
-   `git switch master` deletes the working-tree `Cargo.lock` (untracked there);
-   the next cargo command regenerates it.
+   Checks out the tag, runs `cargo publish --dry-run` then `cargo publish`,
+   and returns to the branch.
 
-8. Report the tag, the changelog, the CI run that gated the publish, and the
+7. Report the tag, the changelog, the CI run that gated the publish, and the
    crates.io version (`curl https://index.crates.io/si/p-/sip-uri`).
 
 ## Important
@@ -124,7 +97,7 @@ git switch master
 - **Never publish a commit CI has not run on.** The tag's pin commit differs
   from the CI-green master tip only by `Cargo.lock`. If anything else changed
   after the checks — a rebase, a hand-resolved conflict — the earlier green
-  run does not cover it. Re-run the checks and go back to step 5.
+  run does not cover it. Re-run the checks and go back to step 4.
 - **Ask before publishing when anything deviated from these steps.** An outage,
   a rebase, a skipped step, a red-then-fixed run: report the state and let me
   decide.

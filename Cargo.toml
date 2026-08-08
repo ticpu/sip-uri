@@ -11,7 +11,7 @@ documentation = "https://docs.rs/sip-uri"
 readme = "README.md"
 keywords = ["sip", "uri", "voip", "tel", "urn"]
 categories = ["parser-implementations", "network-programming"]
-exclude = ["CLAUDE.md", "hooks/", ".claude/"]
+exclude = ["CLAUDE.md", "hooks/", ".claude/", "scripts/"]
 
 [dependencies]
 
