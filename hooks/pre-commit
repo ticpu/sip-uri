@@ -1,7 +1,20 @@
 #!/bin/bash
-# Pre-commit hook to check formatting, clippy, docs, and tests
+# Pre-commit hook to check Cargo.lock placement, formatting, clippy, docs, and tests
 
 set -e
+
+# Cargo.lock belongs only on the detached commit a release tag points at, so a
+# release build resolves an exact dependency set while master stays a library
+# crate with the lock gitignored. Detached HEAD is the whole signal: on a
+# branch, staging it is always the "forgot to git checkout --detach" mistake.
+if git diff --cached --name-only --diff-filter=AM | grep -qx 'Cargo.lock'; then
+    if git symbolic-ref -q HEAD >/dev/null; then
+        echo "Cargo.lock is staged on branch $(git symbolic-ref --short HEAD)."
+        echo "It may only be committed on the release tag's own detached commit."
+        echo "Run 'git checkout --detach' first, then stage and commit it."
+        exit 1
+    fi
+fi
 
 echo "Running cargo fmt check..."
 if ! cargo fmt --all -- --check; then
@@ -31,7 +44,7 @@ fi
 
 if command -v gitleaks &>/dev/null; then
     echo "Running gitleaks..."
-    if ! gitleaks protect --staged --no-banner; then
+    if ! gitleaks git --staged --no-banner; then
         echo "gitleaks found secrets in staged changes."
         exit 1
     fi
