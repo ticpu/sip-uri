@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 /// RFC 3261 §25: `unreserved = alphanum / mark`
 /// `mark = "-" / "_" / "." / "!" / "~" / "*" / "'" / "(" / ")"`
 pub(crate) fn is_unreserved(c: u8) -> bool {
@@ -148,6 +150,42 @@ pub(crate) fn canonize_header(input: &str) -> String {
     percent_decode(input, is_hnv_char)
 }
 
+/// Percent-encode a URI-header name or value into the canonical form
+/// returned by [`crate::SipUri::header`].
+///
+/// Bytes in the RFC 3261 §25 `hnv-unreserved` + `unreserved` set stay
+/// literal; every other byte — including each byte of a multi-byte UTF-8
+/// character — is emitted as `%XX` with uppercase hex. `hname` and `hvalue`
+/// share the character set, so one function covers both.
+///
+/// The input is the *decoded* logical value: `%` is data and becomes `%25`.
+/// Feeding an already-encoded string double-encodes it.
+///
+/// Returns [`Cow::Borrowed`] when no byte needs encoding.
+pub fn encode_uri_header(s: &str) -> Cow<'_, str> {
+    let bytes = s.as_bytes();
+    let Some(first) = bytes
+        .iter()
+        .position(|&b| !is_hnv_char(b))
+    else {
+        return Cow::Borrowed(s);
+    };
+
+    let mut out = String::with_capacity(bytes.len() + 2 * (bytes.len() - first));
+    out.push_str(&s[..first]);
+    for &b in &bytes[first..] {
+        if is_hnv_char(b) {
+            out.push(b as char);
+        } else {
+            const HEX: &[u8; 16] = b"0123456789ABCDEF";
+            out.push('%');
+            out.push(HEX[(b >> 4) as usize] as char);
+            out.push(HEX[(b & 0x0F) as usize] as char);
+        }
+    }
+    Cow::Owned(out)
+}
+
 /// Find the `@` delimiter that separates userinfo from hostport in a SIP URI.
 ///
 /// Uses the sofia-sip two-phase algorithm (url.c:616-626). `@` is not in
@@ -221,6 +259,32 @@ mod tests {
         assert_eq!(find_userinfo_at("user@host"), Some(4));
         assert_eq!(find_userinfo_at("host"), None);
         assert_eq!(find_userinfo_at("u@h?From=foo@bar"), Some(1));
+    }
+
+    #[test]
+    fn encode_uri_header_borrows_when_clean() {
+        assert!(matches!(encode_uri_header(""), Cow::Borrowed("")));
+        assert!(matches!(
+            encode_uri_header("a-zA-Z0-9[]/?:+$"),
+            Cow::Borrowed(_)
+        ));
+    }
+
+    #[test]
+    fn encode_uri_header_escapes_non_hnv() {
+        assert_eq!(
+            encode_uri_header("12345@example.com;to-tag=abc"),
+            "12345%40example.com%3Bto-tag%3Dabc"
+        );
+        assert_eq!(encode_uri_header("%"), "%25");
+        assert_eq!(encode_uri_header("a b"), "a%20b");
+        assert_eq!(encode_uri_header("é"), "%C3%A9");
+    }
+
+    #[test]
+    fn encode_uri_header_matches_canonical_form() {
+        let encoded = encode_uri_header("12345@example.com;to-tag=abc");
+        assert_eq!(canonize_header(&encoded), encoded.as_ref());
     }
 
     #[test]

@@ -1319,3 +1319,12 @@ fn urn_roundtrip_all_ng911_patterns() {
         assert_eq!(urn.to_string(), input, "round-trip failed for {input}");
     }
 }
+
+#[test]
+fn encode_uri_header_round_trips_through_parse() {
+    let replaces = sip_uri::encode_uri_header("12345@example.com;to-tag=abc;from-tag=def");
+    let uri: SipUri = format!("sip:alice@example.com?Replaces={replaces}")
+        .parse()
+        .unwrap();
+    assert_eq!(uri.header("Replaces"), Some(replaces.as_ref()));
+}

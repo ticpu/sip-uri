@@ -51,6 +51,7 @@ pub use error::{
 pub use host::Host;
 #[allow(deprecated)]
 pub use name_addr::NameAddr;
+pub use parse::encode_uri_header;
 pub use sip_uri::{Scheme, SipUri};
 pub use tel_uri::TelUri;
 pub use uri::Uri;
