@@ -118,9 +118,9 @@ mod tests {
 
     #[test]
     fn parse_ipv4() {
-        let (host, consumed) = Host::parse_from_uri("172.21.55.55:5060").unwrap();
-        assert_eq!(host, Host::IPv4(Ipv4Addr::new(172, 21, 55, 55)));
-        assert_eq!(consumed, 12);
+        let (host, consumed) = Host::parse_from_uri("198.51.100.55:5060").unwrap();
+        assert_eq!(host, Host::IPv4(Ipv4Addr::new(198, 51, 100, 55)));
+        assert_eq!(consumed, 13);
     }
 
     #[test]
