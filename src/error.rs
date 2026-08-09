@@ -66,6 +66,18 @@ impl From<ParseUrnError> for ParseUriError {
     }
 }
 
+/// Error returned when parsing a standalone [`Host`](crate::Host) fails.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseHostError(pub String);
+
+impl fmt::Display for ParseHostError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid host: {}", self.0)
+    }
+}
+
+impl std::error::Error for ParseHostError {}
+
 /// Error returned when parsing a [`NameAddr`](crate::NameAddr) fails.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseNameAddrError(pub String);

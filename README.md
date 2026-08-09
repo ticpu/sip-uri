@@ -94,6 +94,27 @@ let uri = SipUri::new(Host::IPv4(Ipv4Addr::new(198, 51, 100, 1)))
 assert_eq!(uri.to_string(), "sips:+15551234567@198.51.100.1:5061;transport=tcp");
 ```
 
+## Host
+
+`Host` parses on its own, for slots that hold an address but are not URIs
+(URI parameter values, SDP connection lines, log text). `Display` brackets IPv6
+for URI position; `bare()` never brackets.
+
+```rust
+use sip_uri::Host;
+
+let host: Host = "[2001:db8::1]".parse().unwrap();
+assert_eq!(host.to_string(), "[2001:db8::1]");
+assert_eq!(host.bare().to_string(), "2001:db8::1");
+
+// Hostnames, bare IPv4 and bare IPv6 parse too; a trailing port does not.
+assert!("example.com".parse::<Host>().is_ok());
+assert!("2001:db8::1".parse::<Host>().is_ok());
+assert!("example.com:5060".parse::<Host>().is_err());
+```
+
+Brackets are the `IPv6reference` production, so `[198.51.100.1]` is rejected.
+
 ## TelUri
 
 ```rust

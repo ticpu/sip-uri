@@ -46,9 +46,10 @@ mod uri;
 mod urn_uri;
 
 pub use error::{
-    ParseNameAddrError, ParseSipUriError, ParseTelUriError, ParseUriError, ParseUrnError,
+    ParseHostError, ParseNameAddrError, ParseSipUriError, ParseTelUriError, ParseUriError,
+    ParseUrnError,
 };
-pub use host::Host;
+pub use host::{Bare, Host};
 #[allow(deprecated)]
 pub use name_addr::NameAddr;
 pub use parse::encode_uri_header;
