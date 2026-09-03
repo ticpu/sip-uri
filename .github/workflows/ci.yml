@@ -10,10 +10,27 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    # Lib only: dev-dependencies are free to require a newer toolchain than
+    # what we promise published consumers.
+    - name: Read rust-version from Cargo.toml
+      run: echo "MSRV=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].rust_version')" >> "$GITHUB_ENV"
+
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.MSRV }}
+
+    - name: Check
+      run: cargo check
+
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -21,7 +38,7 @@ jobs:
         targets: x86_64-unknown-linux-musl
 
     - name: Cache cargo
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: |
           ~/.cargo/bin/
