@@ -52,7 +52,7 @@ pub use error::{
 pub use host::{Bare, Host};
 #[allow(deprecated)]
 pub use name_addr::NameAddr;
-pub use parse::encode_uri_header;
+pub use parse::{decode_user, encode_uri_header};
 pub use sip_uri::{Scheme, SipUri};
 pub use tel_uri::TelUri;
 pub use uri::Uri;

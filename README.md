@@ -189,13 +189,19 @@ Per-component percent-encoding follows RFC 3261 rules:
 - Reserved characters stay encoded (`%40` stays `%40` in user-part)
 - Hex digits are normalized to uppercase (`%3d` -> `%3D`)
 - Each URI component has its own allowed character set
+- `decode_user` fully decodes a bare user part (every `%XX`, bytes out) for
+  callers holding the logical value rather than the canonical form, e.g.
+  FreeSWITCH's `sip_req_user`
 
 ```rust
-use sip_uri::SipUri;
+use sip_uri::{decode_user, SipUri};
 
 // Percent-encoded quotes in user-part are preserved
 let uri: SipUri = r#"sip:%22foo%22@example.com"#.parse().unwrap();
 assert_eq!(uri.user(), Some(r#"%22foo%22"#));
+
+// Full decode of a bare user part
+assert_eq!(decode_user("%2B15551234567").as_ref(), b"+15551234567");
 ```
 
 ## Design

@@ -64,12 +64,12 @@ fn hex_digit(c: u8) -> Option<u8> {
     }
 }
 
-/// Percent-decode a string, applying a component-specific filter.
+/// Percent-decode into bytes, applying a component-specific filter.
 ///
 /// Only decodes `%XX` sequences where the decoded byte satisfies `allow_decoded`.
-/// Characters that are reserved in this component stay encoded.
-/// Hex digits in percent-encoding are normalized to uppercase.
-pub(crate) fn percent_decode(input: &str, allow_decoded: fn(u8) -> bool) -> String {
+/// Other sequences stay encoded with hex normalized to uppercase. A `%` not
+/// followed by two hex digits is copied verbatim.
+fn percent_decode_bytes(input: &str, allow_decoded: fn(u8) -> bool) -> Vec<u8> {
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -81,7 +81,6 @@ pub(crate) fn percent_decode(input: &str, allow_decoded: fn(u8) -> bool) -> Stri
                 if allow_decoded(decoded) {
                     out.push(decoded);
                 } else {
-                    // Keep encoded but normalize hex to uppercase
                     out.push(b'%');
                     out.push(bytes[i + 1].to_ascii_uppercase());
                     out.push(bytes[i + 2].to_ascii_uppercase());
@@ -94,6 +93,17 @@ pub(crate) fn percent_decode(input: &str, allow_decoded: fn(u8) -> bool) -> Stri
         i += 1;
     }
 
+    out
+}
+
+/// Percent-decode a string, applying a component-specific filter.
+///
+/// Only decodes `%XX` sequences where the decoded byte satisfies `allow_decoded`.
+/// Characters that are reserved in this component stay encoded.
+/// Hex digits in percent-encoding are normalized to uppercase.
+pub(crate) fn percent_decode(input: &str, allow_decoded: fn(u8) -> bool) -> String {
+    let out = percent_decode_bytes(input, allow_decoded);
+
     // SAFETY: All allow_decoded predicates (is_unreserved, is_user_char,
     // is_paramchar, is_hnv_char, is_password_char) only return true for bytes
     // in 0x00-0x7F (they call is_ascii_alphanumeric() or match on specific
@@ -101,6 +111,30 @@ pub(crate) fn percent_decode(input: &str, allow_decoded: fn(u8) -> bool) -> Stri
     // Undecoded bytes are copied verbatim from input, which is valid UTF-8
     // by the &str invariant.
     unsafe { String::from_utf8_unchecked(out) }
+}
+
+/// Decode every `%XX` in a SIP user part to its octet.
+///
+/// The input is the encoded `user` production as it appears before `@`,
+/// user-params included: `%2B1555` from FreeSWITCH's `sip_req_user`, or the
+/// canonical form [`crate::SipUri::user`] holds. The result is the logical
+/// value, not a URI component: `%3B` and a literal `;` both come out as `;`,
+/// so a user-params split is lost, and the bytes need not be UTF-8. A `%` not
+/// followed by two hex digits is copied verbatim.
+///
+/// Returns [`Cow::Borrowed`] when the input contains no `%`.
+///
+/// ```
+/// use sip_uri::decode_user;
+///
+/// let decoded = decode_user("%2B15551234567");
+/// assert_eq!(String::from_utf8_lossy(&decoded), "+15551234567");
+/// ```
+pub fn decode_user(user: &str) -> Cow<'_, [u8]> {
+    if !user.contains('%') {
+        return Cow::Borrowed(user.as_bytes());
+    }
+    Cow::Owned(percent_decode_bytes(user, |_| true))
 }
 
 /// Validate that a string contains only valid percent-encoded or allowed characters.
@@ -285,6 +319,37 @@ mod tests {
     fn encode_uri_header_matches_canonical_form() {
         let encoded = encode_uri_header("12345@example.com;to-tag=abc");
         assert_eq!(canonize_header(&encoded), encoded.as_ref());
+    }
+
+    #[test]
+    fn decode_user_borrows_when_clean() {
+        assert!(matches!(decode_user(""), Cow::Borrowed(b"")));
+        assert!(matches!(
+            decode_user("+15551234567;cpc=emergency"),
+            Cow::Borrowed(_)
+        ));
+    }
+
+    #[test]
+    fn decode_user_decodes_every_escape() {
+        assert_eq!(decode_user("%2B1555").as_ref(), b"+1555");
+        assert_eq!(decode_user("%22foo%22").as_ref(), b"\"foo\"");
+        assert_eq!(decode_user("a%3Bb").as_ref(), b"a;b");
+        assert_eq!(decode_user("%2b%3b").as_ref(), b"+;");
+        assert_eq!(decode_user("%FF").as_ref(), b"\xFF");
+    }
+
+    #[test]
+    fn decode_user_keeps_malformed_percent() {
+        assert_eq!(decode_user("100%").as_ref(), b"100%");
+        assert_eq!(decode_user("a%2").as_ref(), b"a%2");
+        assert_eq!(decode_user("%zz").as_ref(), b"%zz");
+    }
+
+    #[test]
+    fn decode_user_matches_decoding_canonical_form() {
+        let raw = "%2b%22foo%22%3bcpc%3Demergency";
+        assert_eq!(decode_user(raw), decode_user(&canonize_user(raw)));
     }
 
     #[test]
