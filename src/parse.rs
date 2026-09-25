@@ -191,9 +191,36 @@ pub(crate) fn canonize_param(input: &str) -> String {
     percent_decode(input, is_paramchar)
 }
 
-/// Canonize a percent-encoded header component.
+/// Canonize a header name or value: every octet, escaped or literal, is
+/// written literally when in the hnv set and as uppercase `%XX` otherwise.
+/// A `%` not starting a valid escape is the octet `%`.
 pub(crate) fn canonize_header(input: &str) -> String {
-    percent_decode(input, is_hnv_char)
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(hi), Some(lo)) = (hex_digit(bytes[i + 1]), hex_digit(bytes[i + 2])) {
+                push_hnv_octet(&mut out, (hi << 4) | lo);
+                i += 3;
+                continue;
+            }
+        }
+        push_hnv_octet(&mut out, bytes[i]);
+        i += 1;
+    }
+    out
+}
+
+fn push_hnv_octet(out: &mut String, b: u8) {
+    if is_hnv_char(b) {
+        out.push(b as char);
+    } else {
+        const HEX: &[u8; 16] = b"0123456789ABCDEF";
+        out.push('%');
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0F) as usize] as char);
+    }
 }
 
 /// Percent-encode a URI-header name or value into the canonical form
@@ -220,14 +247,7 @@ pub fn encode_uri_header(s: &str) -> Cow<'_, str> {
     let mut out = String::with_capacity(bytes.len() + 2 * (bytes.len() - first));
     out.push_str(&s[..first]);
     for &b in &bytes[first..] {
-        if is_hnv_char(b) {
-            out.push(b as char);
-        } else {
-            const HEX: &[u8; 16] = b"0123456789ABCDEF";
-            out.push('%');
-            out.push(HEX[(b >> 4) as usize] as char);
-            out.push(HEX[(b & 0x0F) as usize] as char);
-        }
+        push_hnv_octet(&mut out, b);
     }
     Cow::Owned(out)
 }

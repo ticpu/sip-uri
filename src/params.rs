@@ -195,8 +195,8 @@ mod tests {
         assert_eq!(
             headers,
             vec![
-                ("From".into(), "foo@bar".into()),
-                ("To".into(), "bar@baz".into()),
+                ("From".into(), "foo%40bar".into()),
+                ("To".into(), "bar%40baz".into()),
             ]
         );
     }

@@ -194,7 +194,7 @@ fn param_extension_chars() {
 #[test]
 fn invalid_header_char() {
     let (uri, w) = sip("sip:alice@example.com?Subject=a b");
-    assert_eq!(uri.header("Subject"), Some("a b"));
+    assert_eq!(uri.header("Subject"), Some("a%20b"));
     only(&w, Component::Header, WarningCode::InvalidChar);
 }
 

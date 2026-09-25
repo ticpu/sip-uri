@@ -114,9 +114,10 @@ impl Component {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum WarningCode {
-    /// A character outside the component's character set, kept literally.
+    /// A character outside the component's character set, kept as the same
+    /// octet (escaped in a URI header, literal elsewhere).
     InvalidChar,
-    /// A `%` not followed by two hex digits, kept literally.
+    /// A `%` not followed by two hex digits, kept as the octet `%`.
     MalformedEscape,
     /// A parameter with no name before `=`.
     EmptyName,

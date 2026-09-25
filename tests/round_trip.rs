@@ -66,8 +66,8 @@ fn sofia_full_sips() {
     assert_eq!(uri.host(), &Host::Hostname("host".into()));
     assert_eq!(uri.port(), Some(32));
     assert_eq!(uri.params(), &[("param".into(), Some("1".into()))]);
-    assert_eq!(uri.header("From"), Some("foo@bar"));
-    assert_eq!(uri.header("To"), Some("bar@baz"));
+    assert_eq!(uri.header("From"), Some("foo%40bar"));
+    assert_eq!(uri.header("To"), Some("bar%40baz"));
 }
 
 #[test]
@@ -790,12 +790,12 @@ fn sofia_full_with_fragment() {
     assert_eq!(uri.host(), &Host::Hostname("host".into()));
     assert_eq!(uri.port(), Some(32));
     assert_eq!(uri.param("param"), Some(&Some("1".into())));
-    assert_eq!(uri.header("From"), Some("foo@bar"));
-    assert_eq!(uri.header("To"), Some("bar@baz"));
+    assert_eq!(uri.header("From"), Some("foo%40bar"));
+    assert_eq!(uri.header("To"), Some("bar%40baz"));
     assert_eq!(uri.fragment(), Some("unf"));
     assert_eq!(
         uri.to_string(),
-        "sip:user:pass@host:32;param=1?From=foo@bar&To=bar@baz#unf"
+        "sip:user:pass@host:32;param=1?From=foo%40bar&To=bar%40baz#unf"
     );
 }
 
@@ -1306,6 +1306,21 @@ fn urn_roundtrip_all_ng911_patterns() {
             .expect(input);
         assert_eq!(urn.to_string(), input, "round-trip failed for {input}");
     }
+}
+
+#[test]
+fn literal_and_escaped_header_octets_compare_equal() {
+    let literal: SipUri = "sip:alice@example.com?From=a@example.org&Subject=%E2%9C%93x"
+        .parse()
+        .unwrap();
+    let escaped: SipUri = "sip:alice@example.com?From=a%40example.org&Subject=%e2%9c%93%78"
+        .parse()
+        .unwrap();
+    assert_eq!(literal, escaped);
+    assert_eq!(
+        literal.header("From"),
+        Some(sip_uri::encode_uri_header("a@example.org").as_ref())
+    );
 }
 
 #[test]

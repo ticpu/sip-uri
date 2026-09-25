@@ -544,8 +544,8 @@ mod tests {
         assert_eq!(uri.host(), &Host::Hostname("host".into()));
         assert_eq!(uri.port(), Some(32));
         assert_eq!(uri.params(), &[("param".into(), Some("1".into()))]);
-        assert_eq!(uri.header("From"), Some("foo@bar"));
-        assert_eq!(uri.header("To"), Some("bar@baz"));
+        assert_eq!(uri.header("From"), Some("foo%40bar"));
+        assert_eq!(uri.header("To"), Some("bar%40baz"));
     }
 
     #[test]
@@ -674,7 +674,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             uri.to_string(),
-            "sips:user:pass@host:32;param=1?From=foo@bar&To=bar@baz"
+            "sips:user:pass@host:32;param=1?From=foo%40bar&To=bar%40baz"
         );
     }
 
