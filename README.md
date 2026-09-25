@@ -25,7 +25,7 @@ assert_eq!(urn.nss(), Some("sos"));
 
 ```toml
 [dependencies]
-sip-uri = "0.2"
+sip-uri = "0.3"
 ```
 
 ## Types
