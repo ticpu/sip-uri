@@ -33,6 +33,7 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Install Rust
+      id: toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: x86_64-unknown-linux-musl
@@ -46,7 +47,8 @@ jobs:
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
           target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        # Cargo.lock is not tracked on branches, so the manifest and toolchain key the cache.
+        key: ${{ runner.os }}-cargo-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('Cargo.toml') }}
 
     - name: Check
       run: cargo check --all-targets
@@ -58,11 +60,7 @@ jobs:
       run: RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" cargo doc --no-deps
 
     - name: Test
-      run: |
-        set -o pipefail
-        CARGO_TERM_COLOR=never cargo test 2>&1 | tee test-output.txt
-        passed=$(grep '^test result:' test-output.txt | sed 's/.*ok\. \([0-9]*\) passed.*/\1/' | paste -sd+ | bc)
-        echo "TEST_PASSED=$passed" >> "$GITHUB_ENV"
+      run: cargo test
 
     - name: Build
       run: cargo build --release --all-targets

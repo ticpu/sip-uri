@@ -4,7 +4,7 @@
 
 set -e
 
-cargo fmt --all
+cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" cargo doc --no-deps
 cargo test --release

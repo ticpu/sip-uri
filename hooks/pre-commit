@@ -42,12 +42,15 @@ if ! test_output=$(cargo test 2>&1); then
     exit 1
 fi
 
-if command -v gitleaks &>/dev/null; then
-    echo "Running gitleaks..."
-    if ! gitleaks git --staged --no-banner; then
-        echo "gitleaks found secrets in staged changes."
-        exit 1
-    fi
+if ! command -v gitleaks >/dev/null; then
+    echo "gitleaks is not installed; it guards this repo against committing PII."
+    echo "Install it (https://github.com/gitleaks/gitleaks) and commit again."
+    exit 1
+fi
+echo "Running gitleaks..."
+if ! gitleaks git --staged --no-banner; then
+    echo "gitleaks found secrets in staged changes."
+    exit 1
 fi
 
 echo "Pre-commit checks passed"
