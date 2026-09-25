@@ -18,7 +18,61 @@ pub enum Host {
     /// IPv6 address (stored without brackets).
     IPv6(Ipv6Addr),
     /// DNS hostname.
-    Hostname(String),
+    Hostname(Hostname),
+}
+
+/// DNS hostname, lowercase by construction so equal names compare and hash
+/// equal however they were written.
+///
+/// Construction does not validate; [`Host::parse_with_warnings`] reports
+/// characters outside the hostname grammar.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Hostname(String);
+
+impl Hostname {
+    /// The hostname, lowercase.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<String> for Hostname {
+    fn from(mut s: String) -> Self {
+        s.make_ascii_lowercase();
+        Hostname(s)
+    }
+}
+
+impl From<&str> for Hostname {
+    fn from(s: &str) -> Self {
+        Hostname(s.to_ascii_lowercase())
+    }
+}
+
+impl std::ops::Deref for Hostname {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl PartialEq<str> for Hostname {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl PartialEq<&str> for Hostname {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+impl fmt::Display for Hostname {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
 impl Host {
@@ -83,7 +137,7 @@ impl Host {
                 None => warn_hostname_labels(&decoded, host_str, warnings),
             }
 
-            (Some(Host::Hostname(decoded.to_ascii_lowercase())), end)
+            (Some(Host::Hostname(Hostname::from(decoded))), end)
         }
     }
 }

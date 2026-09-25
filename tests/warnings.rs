@@ -543,3 +543,12 @@ fn other_scheme_is_lowercased() {
     assert_eq!(upper.scheme(), Some("https"));
     assert_eq!(upper.to_string(), "https://example.com/Photo.jpg");
 }
+
+#[test]
+fn built_hostname_equals_parsed() {
+    let built = SipUri::new(Host::Hostname("EXAMPLE.COM".into())).with_user("alice");
+    let parsed: SipUri = "sip:alice@example.com"
+        .parse()
+        .unwrap();
+    assert_eq!(built, parsed);
+}
