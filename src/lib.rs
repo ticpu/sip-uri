@@ -50,6 +50,6 @@ pub use host::{Bare, Host};
 pub use parse::{decode_user, encode_uri_header};
 pub use sip_uri::{Scheme, SipUri};
 pub use tel_uri::TelUri;
-pub use uri::Uri;
+pub use uri::{OtherUri, Uri};
 pub use urn_uri::UrnUri;
 pub use warning::{Component, ParseWarning, Parsed, WarningCode, WarningKind};

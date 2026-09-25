@@ -530,3 +530,16 @@ fn errors_never_quote_input() {
         "non-conformant URI: port: signed port at byte 29"
     );
 }
+
+#[test]
+fn other_scheme_is_lowercased() {
+    let upper: Uri = "HTTPS://example.com/Photo.jpg"
+        .parse()
+        .unwrap();
+    let lower: Uri = "https://example.com/Photo.jpg"
+        .parse()
+        .unwrap();
+    assert_eq!(upper, lower);
+    assert_eq!(upper.scheme(), Some("https"));
+    assert_eq!(upper.to_string(), "https://example.com/Photo.jpg");
+}

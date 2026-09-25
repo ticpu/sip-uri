@@ -11,9 +11,9 @@ use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// A parsed URI: SIP/SIPS, tel, URN, or an opaque URI with an unrecognized scheme.
 ///
-/// The `Other` variant stores the raw URI string for schemes this crate does
-/// not parse (e.g. `http:`, `https:`, `data:`). This allows SIP header values
-/// like `Call-Info` to round-trip without rejecting non-SIP URIs.
+/// The `Other` variant keeps text this crate does not parse (e.g. `http:`,
+/// `https:`, `data:`, or text without a scheme), so header values like
+/// `Call-Info` round-trip without rejecting non-SIP URIs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Uri {
@@ -23,8 +23,47 @@ pub enum Uri {
     Tel(TelUri),
     /// URN (Uniform Resource Name).
     Urn(UrnUri),
-    /// URI with an unrecognized scheme, stored as-is.
-    Other(String),
+    /// URI with an unrecognized scheme, or none.
+    Other(OtherUri),
+}
+
+/// Text kept as sent except for its scheme, which is lowercased.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OtherUri {
+    raw: String,
+    scheme_end: Option<usize>,
+}
+
+impl OtherUri {
+    fn new(s: &str) -> Self {
+        match parse::split_scheme(s) {
+            SchemeSplit::Named(scheme, rest) => OtherUri {
+                raw: format!("{}:{rest}", scheme.to_ascii_lowercase()),
+                scheme_end: Some(scheme.len()),
+            },
+            SchemeSplit::Invalid | SchemeSplit::Absent => OtherUri {
+                raw: s.to_string(),
+                scheme_end: None,
+            },
+        }
+    }
+
+    /// The whole URI, with its scheme lowercased.
+    pub fn as_str(&self) -> &str {
+        &self.raw
+    }
+
+    /// The scheme, lowercase, or `None` when the text has none.
+    pub fn scheme(&self) -> Option<&str> {
+        self.scheme_end
+            .map(|end| &self.raw[..end])
+    }
+}
+
+impl fmt::Display for OtherUri {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.raw)
+    }
 }
 
 impl Uri {
@@ -52,10 +91,10 @@ impl Uri {
         }
     }
 
-    /// If this is an unrecognized scheme, return the raw URI string.
+    /// If this is an unrecognized scheme, return the URI text.
     pub fn as_other(&self) -> Option<&str> {
         match self {
-            Uri::Other(s) => Some(s),
+            Uri::Other(o) => Some(o.as_str()),
             _ => None,
         }
     }
@@ -84,16 +123,15 @@ impl Uri {
         }
     }
 
-    /// Consume and return the raw URI string for an unrecognized scheme.
+    /// Consume and return the URI text for an unrecognized scheme.
     pub fn into_other(self) -> Option<String> {
         match self {
-            Uri::Other(s) => Some(s),
+            Uri::Other(o) => Some(o.raw),
             _ => None,
         }
     }
 
-    /// The scheme of this URI: lowercase for the parsed variants, as written
-    /// for [`Uri::Other`], `None` when the input had none.
+    /// The scheme of this URI, lowercase, `None` when the input had none.
     pub fn scheme(&self) -> Option<&str> {
         match self {
             Uri::Sip(u) => u
@@ -101,10 +139,7 @@ impl Uri {
                 .map(Scheme::as_str),
             Uri::Tel(_) => Some("tel"),
             Uri::Urn(_) => Some("urn"),
-            Uri::Other(s) => match parse::split_scheme(s) {
-                SchemeSplit::Named(scheme, _) => Some(scheme),
-                SchemeSplit::Invalid | SchemeSplit::Absent => None,
-            },
+            Uri::Other(o) => o.scheme(),
         }
     }
 
@@ -195,7 +230,7 @@ impl Uri {
                 warnings.push(Component::Scheme, WarningCode::MissingScheme, s, 0);
             }
         }
-        Ok(warnings.finish(Uri::Other(s.to_string())))
+        Ok(warnings.finish(Uri::Other(OtherUri::new(s))))
     }
 }
 
@@ -205,7 +240,7 @@ impl fmt::Display for Uri {
             Uri::Sip(u) => write!(f, "{u}"),
             Uri::Tel(u) => write!(f, "{u}"),
             Uri::Urn(u) => write!(f, "{u}"),
-            Uri::Other(s) => write!(f, "{s}"),
+            Uri::Other(o) => write!(f, "{o}"),
         }
     }
 }
