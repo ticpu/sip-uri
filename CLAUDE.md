@@ -17,7 +17,7 @@ The pre-commit hook runs gitleaks on staged content and refuses to commit withou
 
 ## New RFC checks warn, never reject
 
-A grammar check added to a parser pushes a `ParseWarning`; it never turns accepted input into an `Err`.
+A grammar check added to a parser pushes a `ParseWarning`; it never turns accepted input into an `Err`. The only errors are empty input and a scheme belonging to another type.
 
 ## `#[non_exhaustive]` on every public enum and public-field struct
 
@@ -27,7 +27,7 @@ Single-field error newtypes are exempt.
 
 ## Scope Boundary
 
-URIs only (`addr-spec`, `name-addr`), never SIP header field grammar. A test value with percent-encoded header-level params (`;tag=`, `;serviceurn=`) is header grammar leaking in. `NameAddr` is deprecated since 0.2.0 and must be removed in 0.3.0.
+URIs only (`addr-spec`), never SIP header field grammar. A test value with percent-encoded header-level params (`;tag=`, `;serviceurn=`) is header grammar leaking in.
 
 ## Release Workflow
 
