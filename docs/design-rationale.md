@@ -4,11 +4,17 @@
 
 Whatever an input breaks in the grammar, the parser returns what it could read and reports each breach as a typed warning beside the value. `Err` means only that there is nothing to read, or that a present scheme names a different kind of URI; `Uri` answers the latter with `Other`. A PSAP cannot refuse a call over a malformed caller URI, and it owes the originating network a discrepancy report naming the breach, so rejecting loses the call and silent acceptance loses the report.
 
-`parse_with_warnings` is the base; `FromStr` discards the warnings, and `parse_strict` turns the first one into the error. All three run one path, so a check exists once, as a warning code, and tightening one never narrows what the lenient parsers accept.
+`UriParse::parse_with_warnings` is the base; `parse` discards the warnings, and `parse_strict` turns the first one into the error. All three run one path, so a check exists once, as a warning code, and tightening one never narrows what the lenient parsers accept.
+
+## URI values live in sip-uri-types; parsing lives in sip-uri
+
+A value's identity, meaning its components, canonical form, equality and Display, belongs to sip-uri-types, which downstream crates name in their public APIs. Parsing, warnings, strict mode and redaction belong to sip-uri. Parse policy moves on every minor, and a crate that exposes a URI must not break when it does. The orphan rule leaves the data types without `FromStr`, so parsing is spelled through sip-uri's extension trait.
+
+Params and headers are opaque collections, so their storage can change within 1.x; the serde shape is under the same contract as the fields. The set of URI kinds with their own type is fixed for 1.x, since a new one would turn stored `Other` values into another variant.
 
 ## A spec-required component holds absence, and a warning reports it
 
-A scheme, host, NID, NSS or tel number that is missing or unreadable is `None` with a warning, rather than the whole URI failing. A broken port or host costs that field, never the user part beside it.
+A scheme, host, NID, NSS or tel number that is missing or unreadable is `None` with a warning, rather than the whole URI failing. A broken port or host costs that field, never the user part beside it. A constructor given an empty component holds it as absent wherever its delimiter printed alone would re-parse as nothing.
 
 ## `Uri` without a scheme is `Other`, never a guessed type
 
@@ -16,7 +22,7 @@ Input without a scheme is kept as `Other` with a warning, even when it looks lik
 
 ## An unrecognized scheme is kept, lowercased
 
-`Other` keeps the input as sent except for its scheme, lowercased because schemes compare case-insensitively, so `scheme()` reads the same for every variant and two spellings of one URI compare equal.
+`Other` keeps the input as sent except for its scheme, lowercased because schemes compare case-insensitively, so `scheme()` reads the same for every variant and two spellings of one URI compare equal. Bytes that would break a header line are escaped and nothing is decoded, since the grammar of an unknown scheme is not ours to normalize.
 
 ## A warning names the component and position, never the text
 
@@ -32,24 +38,36 @@ The `telephone-subscriber` form in userinfo is split into the user and its `;`-s
 
 ## `param-unreserved` accepts `@` and `,`, with a warning
 
-Real SIP traffic and the sofia-sip torture corpus put both unescaped in URI params. They parse as literal param characters and are reported, since the grammar does not allow them.
+Real SIP traffic and the sofia-sip torture corpus put both unescaped in URI params. They parse as param characters and are reported, since the grammar does not allow them. The value holds both escaped: a literal `@` in a URI without userinfo reads as the userinfo delimiter, and a literal `,` would make the Display of strictly conformant input fail a strict parse.
 
-## Header values are escaped canonically; user parts are kept as sent
+## Every component holds one canonical form; a user part keeps a literal `#`
 
-A URI header value is re-encoded to its canonical form, every byte outside the `hnv` set escaped, so a literal and an escaped `@` compare equal and match what `encode_uri_header` produces. Header consumers decode before use, so nothing downstream reads the difference. A user part is compared against dialplan numbers as it stands and carries the unescaped `#` that phones send, so it is only normalized where escaping is optional, never re-encoded, and a character outside its set warns instead.
+Each component keeps its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase escape, whether the value was parsed or built. An escaped reserved character stays escaped: RFC 3261 counts it distinct from the literal, and decoding it can change how the value parses. Two spellings of one value therefore compare equal, and no value prints a byte that changes the parse or breaks a header line. A hostname that reads as an IPv4 address is held as one. A user part also keeps a literal `#`, which phones send unescaped and dialplans compare as it stands, while `%23` stays a distinct value. The warning reports the breach; the escape only fixes how the value holds it.
+
+## One canonizing constructor per component; the parser only splits and warns
+
+Builders, parts constructors and deserialization reach each component through the same canonizer, and so does the parser, which splits the input and warns but never canonizes. A value has one identity whichever path made it, and caller-supplied text cannot inject params, headers or a host.
+
+## Grammar predicates are private to each crate, tied by a test
+
+The parser's grammar classes decide warnings, and sip-uri-types' literal sets decide canonical form. Neither crate exports its predicates, so parse policy can widen or narrow what it reports without reaching the 1.0 surface. The one coupling, that conformant text is never re-encoded, is asserted by a byte sweep through the public constructors.
 
 ## Display is the only wire form; other renderings are adapters
 
-Display emits the canonical form and is the one serializer, so `parse(display(parse(x))) == parse(x)` holds for every accepted input, while `display(parse(x)) == x` does not. Any component the parser keeps must be emitted by Display. Another rendering, such as a host without IPv6 brackets or a URI redacted for logs, is a method returning its own Display adapter, never a second serializer.
+Display emits the canonical form and is the one serializer, so `parse(display(v)) == v` holds for every constructible value, while `display(parse(x)) == x` does not. The exceptions are a scheme-less `SipUri` or `Other` whose text begins like a scheme, a scheme-less `SipUri` inside `Uri`, which `Uri` reads as `Other`, an `Other` whose text after the scheme reads as a port, a tel: fragment with no params before it, whose `#` reads as a phone digit, and an empty or dotted-quad hostname built as a `Host` variant directly; each re-parses as another reading or none. Canonical components are ASCII. Any component a value holds must be emitted by Display. Another rendering, such as a host without IPv6 brackets or a URI redacted for logs, is a method returning its own Display adapter, never a second serializer.
 
 Display's output is API that no tooling guards: a trait impl cannot be deprecated and semver checks do not read output. A change to what it emits therefore ships only in a breaking release, after the rendering it replaces is available as an adapter.
 
-Display carries the user part and password, so logs use the redacted rendering, never Display. Its default masks the whole userinfo, or a tel: number, and the caller relaxes it: what a log may carry is the deployment's policy, and only a mask that starts closed fails safe.
+Display carries the user part and password, so logs use the redacted rendering, never Display. Its default masks the whole userinfo, or a tel: number, and the caller relaxes it: what a log may carry is the deployment's policy, and only a mask that starts closed fails safe. Being policy, redaction lives in sip-uri, not with the value. Debug masks the password, since debug output reaches logs without anyone choosing it.
 
-## Builder input is canonized like parsed input
+## Equality is canonical-structural identity, never RFC equivalence
 
-A value handed to a builder is escaped for its component the way parsing canonizes one, so a caller-supplied string cannot inject params or headers, and a built URI obeys the same round-trip rule as a parsed one.
+`Eq` and `Hash` compare the canonical form component by component, so param order, param and header name case, and a tel: number's visual separators all count. RFC equivalence rests on defaults and per-param rules that a 1.x could not revisit without changing the identity of every stored value, so it belongs in separate functions, and the canonical form never reorders, lowercases or strips to approximate it.
 
-## The crate parses URIs, never header fields
+## Serde is structured and goes through the constructor
+
+A URI serializes as its parts and deserializes through the canonizing constructor, so a deserialized value holds the same canonical form as a parsed one. A string form in sip-uri-types would need a second parser there, drifting from sip-uri's; the string adapter lives in sip-uri for callers that want one.
+
+## sip-uri parses URIs, never header fields
 
 Only `addr-spec` is in scope; display names and header-level parameters belong to a SIP header parser. Text still wrapped in `<>` parses as `Other` with a scheme warning, and a test value carrying percent-encoded header params signals header grammar leaking into this layer.

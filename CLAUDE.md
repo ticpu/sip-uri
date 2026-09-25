@@ -1,6 +1,8 @@
 ## Project Type
 
-Zero-dependency SIP/tel/URN URI parser library: RFC 3261 (SIP/SIPS), RFC 3966 (tel:), RFC 8141 (URN). Decisions and their reasons live in `docs/design-rationale.md`.
+SIP/tel/URN URI library: RFC 3261 (SIP/SIPS), RFC 3966 (tel:), RFC 8141 (URN). Workspace of two crates: `sip-uri-types` holds the value types (aiming 1.0, breaks only on identity), `sip-uri` holds parsing, warnings and redaction. Decisions and their reasons live in `docs/design-rationale.md`.
+
+The pre-commit hook runs across `--workspace --all-features`; it is the verification gate.
 
 ## No PII or Organization-Specific Data
 
@@ -18,6 +20,10 @@ The pre-commit hook runs gitleaks on staged content and refuses to commit withou
 ## New RFC checks warn, never reject
 
 A grammar check added to a parser pushes a `ParseWarning`; it never turns accepted input into an `Err`. The only errors are empty input and a scheme belonging to another type.
+
+## Every component goes through its canonizer
+
+Parser, builders, parts constructors and serde reach a component only through the data crate's canonizer; the parser never canonizes on its own.
 
 ## `#[non_exhaustive]` on every public enum and public-field struct
 
