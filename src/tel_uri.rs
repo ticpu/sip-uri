@@ -21,12 +21,11 @@ pub struct TelUri {
 }
 
 impl TelUri {
-    /// Create a new tel: URI with the given number.
-    ///
-    /// The number should include `+` prefix for global numbers.
+    /// Create a new tel: URI with the given number, `+` first for a global
+    /// one. A delimiter or byte outside the number grammar is escaped.
     pub fn new(number: impl Into<String>) -> Self {
         TelUri {
-            number: Some(number.into()),
+            number: Some(parse::canonize_tel_number(&number.into())),
             params: Vec::new(),
             fragment: None,
         }
@@ -69,9 +68,9 @@ impl TelUri {
             .as_deref()
     }
 
-    /// Set the fragment component.
+    /// Set the fragment component, escaping any delimiter in it.
     pub fn with_fragment(mut self, fragment: impl Into<String>) -> Self {
-        self.fragment = Some(fragment.into());
+        self.fragment = Some(parse::canonize_fragment(&fragment.into()));
         self
     }
 }
@@ -143,7 +142,7 @@ impl TelUri {
                         p,
                         hash_pos,
                     );
-                    Some(frag.to_string())
+                    Some(parse::canonize_fragment(frag))
                 };
                 (Some(&p[..hash_pos]), frag)
             }
@@ -161,7 +160,7 @@ impl TelUri {
             None
         } else {
             warn_number(number_str, &params, &mut warnings);
-            Some(number_str.to_string())
+            Some(parse::canonize_tel_number(number_str))
         };
 
         Ok(warnings.finish(TelUri {

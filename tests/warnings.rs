@@ -91,7 +91,7 @@ fn conformant_inputs_raise_nothing() {
 #[test]
 fn invalid_user_char() {
     let (uri, w) = sip("sip:a b@example.com");
-    assert_eq!(uri.user(), Some("a b"));
+    assert_eq!(uri.user(), Some("a%20b"));
     let w = only(&w, Component::User, WarningCode::InvalidChar);
     assert_eq!(w.position, Some(5));
     assert_eq!(w.kind, WarningKind::Recovered);
@@ -100,7 +100,7 @@ fn invalid_user_char() {
 #[test]
 fn malformed_user_escape() {
     let (uri, w) = sip("sip:us%zzer@example.com");
-    assert_eq!(uri.user(), Some("us%zzer"));
+    assert_eq!(uri.user(), Some("us%25zzer"));
     only(&w, Component::User, WarningCode::MalformedEscape);
 }
 
@@ -115,7 +115,7 @@ fn hash_in_user() {
 #[test]
 fn invalid_password_char() {
     let (uri, w) = sip("sip:alice:p w@example.com");
-    assert_eq!(uri.password(), Some("p w"));
+    assert_eq!(uri.password(), Some("p%20w"));
     only(&w, Component::Password, WarningCode::InvalidChar);
 }
 
@@ -187,7 +187,7 @@ fn empty_param_segment() {
 #[test]
 fn param_extension_chars() {
     let (uri, w) = sip("sip:alice@example.com;maddr=a@b");
-    assert_eq!(uri.param("maddr"), Some(Some("a@b")));
+    assert_eq!(uri.param("maddr"), Some(Some("a%40b")));
     only(&w, Component::Param, WarningCode::InvalidChar);
 }
 
@@ -438,7 +438,7 @@ fn unreadable_tel_and_urn_components() {
         parsed
             .value
             .number(),
-        Some("+1 555 123 4567")
+        Some("+1%20555%20123%204567")
     );
     only(
         &parsed.warnings,

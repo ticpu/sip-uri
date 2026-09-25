@@ -91,25 +91,32 @@ fn percent_decode_bytes(input: &str, allow_decoded: impl Fn(u8) -> bool) -> Vec<
     let mut i = 0;
 
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(hi), Some(lo)) = (hex_digit(bytes[i + 1]), hex_digit(bytes[i + 2])) {
-                let decoded = (hi << 4) | lo;
-                if allow_decoded(decoded) {
-                    out.push(decoded);
-                } else {
-                    out.push(b'%');
-                    out.push(bytes[i + 1].to_ascii_uppercase());
-                    out.push(bytes[i + 2].to_ascii_uppercase());
-                }
-                i += 3;
-                continue;
+        if let Some(decoded) = escape_at(bytes, i) {
+            if allow_decoded(decoded) {
+                out.push(decoded);
+            } else {
+                out.push(b'%');
+                out.push(bytes[i + 1].to_ascii_uppercase());
+                out.push(bytes[i + 2].to_ascii_uppercase());
             }
+            i += 3;
+            continue;
         }
         out.push(bytes[i]);
         i += 1;
     }
 
     out
+}
+
+/// The octet escaped by a well-formed `%XX` starting at `i`.
+fn escape_at(bytes: &[u8], i: usize) -> Option<u8> {
+    if bytes.get(i) != Some(&b'%') {
+        return None;
+    }
+    let hi = hex_digit(*bytes.get(i + 1)?)?;
+    let lo = hex_digit(*bytes.get(i + 2)?)?;
+    Some((hi << 4) | lo)
 }
 
 /// Percent-decode a string, applying a component-specific filter.
@@ -157,10 +164,7 @@ pub(crate) fn validate_pct_encoded(input: &str, allowed: fn(u8) -> bool) -> Resu
 
     while i < bytes.len() {
         if bytes[i] == b'%' {
-            if i + 2 < bytes.len()
-                && bytes[i + 1].is_ascii_hexdigit()
-                && bytes[i + 2].is_ascii_hexdigit()
-            {
+            if escape_at(bytes, i).is_some() {
                 i += 3;
                 continue;
             }
@@ -181,61 +185,94 @@ pub(crate) fn is_user_literal(c: u8) -> bool {
     is_user_char(c) && c != b';'
 }
 
+/// The user-literal set plus `#`, which phones and dialplans use unescaped.
+fn is_user_literal_or_hash(c: u8) -> bool {
+    is_user_literal(c) || c == b'#'
+}
+
 /// Octets a user-param name writes literally, where `=` would start the value.
-pub(crate) fn is_user_param_name_literal(c: u8) -> bool {
+fn is_user_param_name_literal(c: u8) -> bool {
     is_user_literal(c) && c != b'='
 }
 
-/// Octets a URI param writes literally. `@` stays escaped, since a literal one
-/// in a URI without userinfo is read as the userinfo delimiter.
-pub(crate) fn is_param_literal(c: u8) -> bool {
-    is_paramchar(c) && c != b'@'
+/// Octets a URI param writes literally: `paramchar` as RFC 3261 §25 writes it.
+fn is_param_literal(c: u8) -> bool {
+    is_param_strict(c)
 }
 
-/// Canonize a percent-encoded user component: decode unreserved + user-unreserved,
-/// uppercase remaining %XX.
-pub(crate) fn canonize_user(input: &str) -> String {
-    percent_decode(input, is_user_literal)
+/// RFC 3986 §3.3: `pchar = unreserved / pct-encoded / sub-delims / ":" / "@"`
+fn is_pchar(c: u8) -> bool {
+    c.is_ascii_alphanumeric()
+        || matches!(
+            c,
+            b'-' | b'.'
+                | b'_'
+                | b'~'
+                | b'!'
+                | b'$'
+                | b'&'
+                | b'\''
+                | b'('
+                | b')'
+                | b'*'
+                | b'+'
+                | b','
+                | b';'
+                | b'='
+                | b':'
+                | b'@'
+        )
 }
 
-/// Canonize a user-param name.
-pub(crate) fn canonize_user_param_name(input: &str) -> String {
-    percent_decode(input, is_user_param_name_literal)
+/// RFC 3986 §3.5 `fragment` characters, plus `#`.
+fn is_fragment_literal(c: u8) -> bool {
+    is_pchar(c) || matches!(c, b'/' | b'?' | b'#')
 }
 
-/// Canonize a percent-encoded password component.
-pub(crate) fn canonize_password(input: &str) -> String {
-    percent_decode(input, is_password_char)
+/// A SIP fragment holds `@` escaped for the reason a param does.
+fn is_sip_fragment_literal(c: u8) -> bool {
+    is_fragment_literal(c) && c != b'@'
 }
 
-/// Canonize a percent-encoded parameter component.
-pub(crate) fn canonize_param(input: &str) -> String {
-    percent_decode(input, is_param_literal)
+/// RFC 8141: `NSS = pchar *(pchar / "/")`.
+fn is_nss_literal(c: u8) -> bool {
+    is_pchar(c) || c == b'/'
 }
 
-/// Canonize a header name or value: every octet, escaped or literal, is
-/// written literally when in the hnv set and as uppercase `%XX` otherwise.
-pub(crate) fn canonize_header(input: &str) -> String {
-    canonize_octets(input, is_hnv_char)
+/// RFC 8141: r-, q- and f-components are `*( pchar / "/" / "?" )`.
+fn is_rqf_literal(c: u8) -> bool {
+    is_pchar(c) || matches!(c, b'/' | b'?')
 }
 
-/// Write every octet of `input`, escaped or literal, literally when `literal`
-/// admits it and as uppercase `%XX` otherwise. A `%` not starting a valid
-/// escape is the octet `%`, so the result is idempotent.
-pub(crate) fn canonize_octets(input: &str, literal: fn(u8) -> bool) -> String {
+/// RFC 8141: `ldh = alphanum / "-"`.
+fn is_ldh(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'-'
+}
+
+fn never(_: u8) -> bool {
+    false
+}
+
+/// Canonize one component: an escape of an octet in `decode` and a literal
+/// octet in `keep` are written literally, every other octet as uppercase `%XX`.
+///
+/// `decode` must be a subset of `keep`, which then makes the result
+/// idempotent. A `%` not starting a valid escape is the octet `%`.
+fn canonize(input: &str, decode: fn(u8) -> bool, keep: fn(u8) -> bool) -> String {
     let bytes = input.as_bytes();
     let mut out = String::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(hi), Some(lo)) = (hex_digit(bytes[i + 1]), hex_digit(bytes[i + 2])) {
-                push_octet(&mut out, (hi << 4) | lo, literal);
+        match escape_at(bytes, i) {
+            Some(b) => {
+                push_octet(&mut out, b, decode);
                 i += 3;
-                continue;
+            }
+            None => {
+                push_octet(&mut out, bytes[i], keep);
+                i += 1;
             }
         }
-        push_octet(&mut out, bytes[i], literal);
-        i += 1;
     }
     out
 }
@@ -249,6 +286,88 @@ fn push_octet(out: &mut String, b: u8, literal: fn(u8) -> bool) {
         out.push(HEX[(b >> 4) as usize] as char);
         out.push(HEX[(b & 0x0F) as usize] as char);
     }
+}
+
+/// Lowercase every literal octet, leaving escape hex uppercase.
+fn lowercase_literals(s: String) -> String {
+    let mut out = s.into_bytes();
+    let mut i = 0;
+    while i < out.len() {
+        if out[i] == b'%' {
+            i += 3;
+        } else {
+            out[i].make_ascii_lowercase();
+            i += 1;
+        }
+    }
+    // SAFETY: canonized text is ASCII, and lowercasing keeps it ASCII.
+    unsafe { String::from_utf8_unchecked(out) }
+}
+
+/// Canonize a SIP user part or user-param value.
+pub(crate) fn canonize_user(input: &str) -> String {
+    canonize(input, is_unreserved, is_user_literal_or_hash)
+}
+
+/// Canonize a user-param name.
+pub(crate) fn canonize_user_param_name(input: &str) -> String {
+    canonize(input, is_unreserved, is_user_param_name_literal)
+}
+
+/// Canonize a password.
+pub(crate) fn canonize_password(input: &str) -> String {
+    canonize(input, is_unreserved, is_password_char)
+}
+
+/// Canonize a SIP or tel: param name or value.
+pub(crate) fn canonize_param(input: &str) -> String {
+    canonize(input, is_unreserved, is_param_literal)
+}
+
+/// Canonize a SIP URI header name or value.
+pub(crate) fn canonize_header(input: &str) -> String {
+    canonize(input, is_unreserved, is_hnv_char)
+}
+
+/// Canonize a tel: number.
+pub(crate) fn canonize_tel_number(input: &str) -> String {
+    canonize(input, never, is_user_literal_or_hash)
+}
+
+/// Canonize a SIP fragment.
+pub(crate) fn canonize_sip_fragment(input: &str) -> String {
+    canonize(input, never, is_sip_fragment_literal)
+}
+
+/// Canonize a tel: fragment or URN f-component.
+pub(crate) fn canonize_fragment(input: &str) -> String {
+    canonize(input, never, is_fragment_literal)
+}
+
+/// Canonize a URN NSS.
+pub(crate) fn canonize_nss(input: &str) -> String {
+    canonize(input, never, is_nss_literal)
+}
+
+/// Canonize a URN r-component. A `?` before `=` is escaped, since `?=` would
+/// start the q-component.
+pub(crate) fn canonize_urn_r(input: &str) -> String {
+    canonize(input, never, is_rqf_literal).replace("?=", "%3F=")
+}
+
+/// Canonize a URN q-component.
+pub(crate) fn canonize_urn_q(input: &str) -> String {
+    canonize(input, never, is_rqf_literal)
+}
+
+/// Canonize a URN NID, lowercase.
+pub(crate) fn canonize_nid(input: &str) -> String {
+    lowercase_literals(canonize(input, never, is_ldh))
+}
+
+/// Canonize a hostname, lowercase with uppercase escape hex.
+pub(crate) fn canonize_hostname(input: &str) -> String {
+    lowercase_literals(canonize(input, is_unreserved, is_unreserved))
 }
 
 /// Percent-encode a URI-header name or value into the canonical form
@@ -449,6 +568,31 @@ mod tests {
     fn decode_user_matches_decoding_canonical_form() {
         let raw = "%2b%22foo%22%3bcpc%3Demergency";
         assert_eq!(decode_user(raw), decode_user(&canonize_user(raw)));
+    }
+
+    #[test]
+    fn canonizers_are_idempotent() {
+        let fns: [fn(&str) -> String; 13] = [
+            canonize_user,
+            canonize_user_param_name,
+            canonize_password,
+            canonize_param,
+            canonize_header,
+            canonize_tel_number,
+            canonize_sip_fragment,
+            canonize_fragment,
+            canonize_nss,
+            canonize_urn_r,
+            canonize_urn_q,
+            canonize_nid,
+            canonize_hostname,
+        ];
+        let input = "aZ%41%3b;=?@#% %zz%e2%9c%93é/:&+$,[]!~*'()";
+        for f in fns {
+            let once = f(input);
+            assert!(once.is_ascii(), "{once}");
+            assert_eq!(f(&once), once);
+        }
     }
 
     #[test]

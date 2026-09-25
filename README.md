@@ -167,8 +167,8 @@ assert_eq!(urn.assigned_name(), "urn:example:resource");
 ```
 
 NID is validated per RFC 8141 (2-32 chars, alphanum bookends) and stored
-lowercase. NSS percent-encoding hex digits are uppercased for canonical
-comparison but never decoded.
+lowercase. No URN component decodes an escape; escape hex is uppercased for
+canonical comparison.
 
 ## Display names and header parameters (`name-addr`)
 
@@ -181,12 +181,14 @@ written against sip-uri 0.2's `NameAddr` moves to `SipHeaderAddr`.
 
 ## Percent-encoding
 
-Per-component percent-encoding follows RFC 3261 rules:
+Every component holds one canonical form, whether parsed or built:
 
-- Unreserved characters are decoded (`%41` -> `A`)
-- Reserved characters stay encoded (`%40` stays `%40` in user-part)
-- Hex digits are normalized to uppercase (`%3d` -> `%3D`)
 - Each URI component has its own allowed character set
+- Escapes of allowed characters are decoded (`%41` -> `A`); URN components
+  and tel: numbers decode none
+- Every other byte is an uppercase escape, whether it arrived escaped
+  (`%3d` -> `%3D`) or literal (a space in a user part -> `%20`)
+- A user part also keeps a literal `#`, and `%23` stays a distinct value
 - `decode_user` fully decodes a bare user part (every `%XX`, bytes out) for
   callers holding the logical value rather than the canonical form, e.g.
   FreeSWITCH's `sip_req_user`
@@ -258,6 +260,7 @@ assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
 | `Host::fmt_uri(f)` | `Display` |
 | builders emit their input verbatim | builders escape delimiters, keep `%XX` |
 | `%3B` in a user part, `%40` in a URI param decoded | kept escaped, so Display round-trips |
+| a byte outside a component's grammar kept literal | escaped as `%XX`, with a warning |
 | `"*".parse::<Uri>()` is `Err` | `Uri::Other` with a `Wildcard` warning |
 
 Code that used `let Ok(uri) = s.parse() else { reject }` to refuse malformed

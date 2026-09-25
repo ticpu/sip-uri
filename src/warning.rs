@@ -132,10 +132,10 @@ impl Component {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum WarningCode {
-    /// A character outside the component's character set, kept as the same
-    /// octet (escaped in a URI header, literal elsewhere).
+    /// A character outside the component's character set, held as its
+    /// escaped octet.
     InvalidChar,
-    /// A `%` not followed by two hex digits, kept as the octet `%`.
+    /// A `%` not followed by two hex digits, held as the octet `%`, `%25`.
     MalformedEscape,
     /// A parameter with no name before `=`.
     EmptyName,
@@ -291,7 +291,7 @@ impl WarningCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum WarningKind {
-    /// Kept as sent; re-serializing reproduces it.
+    /// Kept; re-serializing carries the same octets, canonically escaped.
     Recovered,
     /// Dropped; re-serializing omits it.
     Lost,

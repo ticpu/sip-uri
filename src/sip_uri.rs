@@ -81,13 +81,10 @@ impl SipUri {
         self
     }
 
-    /// Set the user part.
-    ///
-    /// Builder text is canonized like parsed text: `%XX` is kept, and a
-    /// delimiter or byte outside the user grammar is escaped, so the value
-    /// can never add user-params or end the userinfo.
+    /// Set the user part, canonized like parsed text: a delimiter or byte
+    /// outside the user grammar is escaped, so it cannot add user-params.
     pub fn with_user(mut self, user: impl Into<String>) -> Self {
-        self.user = Some(parse::canonize_octets(&user.into(), parse::is_user_literal));
+        self.user = Some(parse::canonize_user(&user.into()));
         self
     }
 
@@ -111,10 +108,7 @@ impl SipUri {
 
     /// Set the password, escaping any delimiter in it.
     pub fn with_password(mut self, password: impl Into<String>) -> Self {
-        self.password = Some(parse::canonize_octets(
-            &password.into(),
-            parse::is_password_char,
-        ));
+        self.password = Some(parse::canonize_password(&password.into()));
         self
     }
 
@@ -213,9 +207,9 @@ impl SipUri {
             .as_deref()
     }
 
-    /// Set the fragment component.
+    /// Set the fragment component, escaping any delimiter in it.
     pub fn with_fragment(mut self, fragment: impl Into<String>) -> Self {
-        self.fragment = Some(fragment.into());
+        self.fragment = Some(parse::canonize_sip_fragment(&fragment.into()));
         self
     }
 
@@ -313,8 +307,8 @@ impl SipUri {
 
 fn canonize_user_param(name: &str, value: Option<&str>) -> (String, Option<String>) {
     (
-        parse::canonize_octets(name, parse::is_user_param_name_literal),
-        value.map(|v| parse::canonize_octets(v, parse::is_user_literal)),
+        parse::canonize_user_param_name(name),
+        value.map(parse::canonize_user),
     )
 }
 
@@ -426,7 +420,7 @@ fn parse_hostport_params_headers(s: &str, warnings: &mut Warnings) -> Hostport {
                 rest,
                 hash_pos,
             );
-            Some(frag.to_string())
+            Some(parse::canonize_sip_fragment(frag))
         };
         (&rest[..hash_pos], frag)
     } else {

@@ -1,4 +1,4 @@
-use sip_uri::{Host, Scheme, SipUri, TelUri, Uri, UrnUri, WarningCode};
+use sip_uri::{Host, Hostname, Scheme, SipUri, TelUri, Uri, UrnUri, WarningCode};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 // ========================================================================
@@ -1221,6 +1221,88 @@ fn builder_input_cannot_inject_components() {
         1
     );
     assert_eq!(reparsed.host(), Some(&Host::Hostname("example.com".into())));
+}
+
+#[test]
+fn tel_number_cannot_inject_params() {
+    let tel = TelUri::new("+1555;x=1");
+    assert_eq!(tel.number(), Some("+1555%3Bx=1"));
+    let reparsed: TelUri = tel
+        .to_string()
+        .parse()
+        .unwrap();
+    assert_eq!(reparsed, tel);
+    assert!(reparsed
+        .params()
+        .is_empty());
+}
+
+#[test]
+fn hostname_cannot_inject_params() {
+    let uri = SipUri::new(Host::Hostname("evil;lr".into()));
+    assert_eq!(uri.to_string(), "sip:evil%3Blr");
+    let reparsed: SipUri = uri
+        .to_string()
+        .parse()
+        .unwrap();
+    assert_eq!(reparsed, uri);
+    assert!(reparsed
+        .params()
+        .is_empty());
+}
+
+#[test]
+fn hostname_canonizes_like_parsed_host() {
+    assert_eq!(Hostname::from("EXAMPLE%2ecom").as_str(), "example.com");
+    assert_eq!(Hostname::from("a b%3b").as_str(), "a%20b%3B");
+}
+
+#[test]
+fn fragments_cannot_inject_components() {
+    let sip = SipUri::new(Host::Hostname("example.com".into())).with_fragment("a@b c");
+    assert_eq!(sip.fragment(), Some("a%40b%20c"));
+    let reparsed: SipUri = sip
+        .to_string()
+        .parse()
+        .unwrap();
+    assert_eq!(reparsed, sip);
+    assert_eq!(reparsed.user(), None);
+
+    let tel = TelUri::new("+15551234567")
+        .with_param("cpc", Some("emergency".into()))
+        .with_fragment("x y#z");
+    assert_eq!(tel.fragment(), Some("x%20y#z"));
+    let reparsed: TelUri = tel
+        .to_string()
+        .parse()
+        .unwrap();
+    assert_eq!(reparsed, tel);
+
+    let urn = UrnUri::new("example", "a?b#c")
+        .with_r_component("r?=q")
+        .with_f_component("f g");
+    assert_eq!(urn.nss(), Some("a%3Fb%23c"));
+    assert_eq!(urn.r_component(), Some("r%3F=q"));
+    assert_eq!(urn.f_component(), Some("f%20g"));
+    let reparsed: UrnUri = urn
+        .to_string()
+        .parse()
+        .unwrap();
+    assert_eq!(reparsed, urn);
+    assert_eq!(reparsed.q_component(), None);
+}
+
+#[test]
+fn literal_hash_and_escaped_hash_stay_distinct_in_user() {
+    let literal: SipUri = "sip:%2A#@example.com"
+        .parse()
+        .unwrap();
+    let escaped: SipUri = "sip:*%23@example.com"
+        .parse()
+        .unwrap();
+    assert_eq!(literal.user(), Some("*#"));
+    assert_eq!(escaped.user(), Some("*%23"));
+    assert_ne!(literal, escaped);
 }
 
 #[test]

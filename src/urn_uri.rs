@@ -2,7 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::error::ParseError;
-use crate::parse::{self, percent_decode, SchemeSplit};
+use crate::parse::{self, SchemeSplit};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// URN (Uniform Resource Name) per RFC 8141.
@@ -10,10 +10,9 @@ use crate::warning::{Component, Parsed, WarningCode, Warnings};
 /// Represents `urn:NID:NSS` with optional resolution (`?+`), query (`?=`),
 /// and fragment (`#`) components.
 ///
-/// The NID is stored lowercase per RFC 8141 equivalence rules.
-/// The NSS is stored as-is; percent-encoded hex digits are uppercased for
-/// canonical comparison but the original octets are preserved (never decoded).
-/// A missing NID or NSS is `None`.
+/// The NID is stored lowercase per RFC 8141 equivalence rules. No component
+/// decodes an escape; escape hex is uppercase, and a byte outside the
+/// component's grammar is escaped. A missing NID or NSS is `None`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct UrnUri {
@@ -27,15 +26,11 @@ pub struct UrnUri {
 impl UrnUri {
     /// Create a new URN with the given NID and NSS.
     ///
-    /// The NID is lowercased. No validation is performed on the builder path;
-    /// use `FromStr` for validated parsing.
+    /// Both are canonized like parsed text, and the NID is lowercased.
     pub fn new(nid: impl Into<String>, nss: impl Into<String>) -> Self {
         UrnUri {
-            nid: Some(
-                nid.into()
-                    .to_ascii_lowercase(),
-            ),
-            nss: Some(nss.into()),
+            nid: Some(parse::canonize_nid(&nid.into())),
+            nss: Some(parse::canonize_nss(&nss.into())),
             r_component: None,
             q_component: None,
             f_component: None,
@@ -44,19 +39,19 @@ impl UrnUri {
 
     /// Set the resolution component (`?+`).
     pub fn with_r_component(mut self, r: impl Into<String>) -> Self {
-        self.r_component = Some(r.into());
+        self.r_component = Some(parse::canonize_urn_r(&r.into()));
         self
     }
 
     /// Set the query component (`?=`).
     pub fn with_q_component(mut self, q: impl Into<String>) -> Self {
-        self.q_component = Some(q.into());
+        self.q_component = Some(parse::canonize_urn_q(&q.into()));
         self
     }
 
     /// Set the fragment component (`#`).
     pub fn with_f_component(mut self, f: impl Into<String>) -> Self {
-        self.f_component = Some(f.into());
+        self.f_component = Some(parse::canonize_fragment(&f.into()));
         self
     }
 
@@ -66,7 +61,7 @@ impl UrnUri {
             .as_deref()
     }
 
-    /// The Namespace Specific String (as received, with hex uppercased).
+    /// The Namespace Specific String.
     pub fn nss(&self) -> Option<&str> {
         self.nss
             .as_deref()
@@ -189,7 +184,7 @@ impl UrnUri {
             if !is_valid_nid(nid_str) {
                 warnings.push(Component::Nid, WarningCode::InvalidNid, nid_str, 0);
             }
-            Some(nid_str.to_ascii_lowercase())
+            Some(parse::canonize_nid(nid_str))
         };
 
         let after_nid = after_nid.unwrap_or_default();
@@ -198,7 +193,7 @@ impl UrnUri {
         let (before_fragment, f_component) = match after_nid.split_once('#') {
             Some((before, frag)) => {
                 warnings.charset(Component::FComponent, frag, is_rqf_char);
-                (before, Some(frag.to_string()))
+                (before, Some(parse::canonize_fragment(frag)))
             }
             None => (after_nid, None),
         };
@@ -229,7 +224,7 @@ impl UrnUri {
             } else {
                 warnings.charset(Component::Nss, nss_str, |b| is_pchar(b) || b == b'/');
             }
-            Some(percent_decode(nss_str, |_| false))
+            Some(parse::canonize_nss(nss_str))
         };
 
         let (r_component, q_component) = match rq_str {
@@ -251,8 +246,8 @@ impl UrnUri {
         Ok(warnings.finish(UrnUri {
             nid,
             nss,
-            r_component: r_component.map(str::to_string),
-            q_component: q_component.map(str::to_string),
+            r_component: r_component.map(parse::canonize_urn_r),
+            q_component: q_component.map(parse::canonize_urn_q),
             f_component,
         }))
     }

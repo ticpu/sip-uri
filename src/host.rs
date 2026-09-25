@@ -21,11 +21,11 @@ pub enum Host {
     Hostname(Hostname),
 }
 
-/// DNS hostname, lowercase by construction so equal names compare and hash
-/// equal however they were written.
+/// DNS hostname in canonical form, so equal names compare and hash equal
+/// however they were written.
 ///
-/// Construction does not validate; [`Host::parse_with_warnings`] reports
-/// characters outside the hostname grammar.
+/// Construction lowercases, decodes escaped unreserved characters and escapes
+/// every other byte outside them; it does not otherwise validate.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Hostname(String);
 
@@ -37,15 +37,14 @@ impl Hostname {
 }
 
 impl From<String> for Hostname {
-    fn from(mut s: String) -> Self {
-        s.make_ascii_lowercase();
-        Hostname(s)
+    fn from(s: String) -> Self {
+        Hostname::from(s.as_str())
     }
 }
 
 impl From<&str> for Hostname {
     fn from(s: &str) -> Self {
-        Hostname(s.to_ascii_lowercase())
+        Hostname(parse::canonize_hostname(s))
     }
 }
 
@@ -137,7 +136,7 @@ impl Host {
                 None => warn_hostname_labels(&decoded, host_str, warnings),
             }
 
-            (Some(Host::Hostname(Hostname::from(decoded))), end)
+            (Some(Host::Hostname(Hostname::from(host_str))), end)
         }
     }
 }
