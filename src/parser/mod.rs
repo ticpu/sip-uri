@@ -6,12 +6,12 @@ mod uri;
 mod urn;
 
 use crate::error::ParseError;
-use crate::host::Host;
-use crate::sip_uri::SipUri;
-use crate::tel_uri::TelUri;
-use crate::uri::Uri;
-use crate::urn_uri::UrnUri;
 use crate::warning::Parsed;
+use sip_uri_types::Host;
+use sip_uri_types::SipUri;
+use sip_uri_types::TelUri;
+use sip_uri_types::Uri;
+use sip_uri_types::UrnUri;
 
 mod sealed {
     pub trait Sealed {}

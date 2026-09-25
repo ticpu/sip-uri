@@ -25,6 +25,7 @@ categories = ["parser-implementations", "network-programming"]
 exclude = ["CLAUDE.md", "hooks/", ".claude/", "scripts/"]
 
 [dependencies]
+sip-uri-types = { version = "1.0.0-rc.1", path = "sip-uri-types" }
 
 [dev-dependencies]
 clap = { version = "4", default-features = false, features = ["std", "help", "usage", "error-context", "derive"] }

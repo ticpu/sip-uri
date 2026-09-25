@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::grammar::{self, SchemeSplit};
-use crate::uri::{OtherUri, Uri};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
+use sip_uri_types::{OtherUri, Uri};
 
 pub(crate) fn parse(s: &str) -> Result<Parsed<Uri>, ParseError> {
     fn wrap<T>(parsed: Parsed<T>, variant: fn(T) -> Uri) -> Parsed<Uri> {
@@ -49,9 +49,9 @@ pub(crate) fn parse(s: &str) -> Result<Parsed<Uri>, ParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sip_uri::SipUri;
-    use crate::urn_uri::UrnUri;
     use crate::UriParse;
+    use sip_uri_types::SipUri;
+    use sip_uri_types::UrnUri;
 
     #[test]
     fn dispatch_sip() {

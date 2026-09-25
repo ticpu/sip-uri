@@ -35,26 +35,18 @@
 //! }
 //! ```
 
-mod canon;
 mod error;
 mod grammar;
-mod host;
-mod params;
 mod parser;
 mod redact;
-mod sip_uri;
-mod tel_uri;
-mod uri;
-mod urn_uri;
 mod warning;
 
-pub use canon::{decode_user, encode_uri_header};
 pub use error::ParseError;
-pub use host::{Bare, Host, Hostname};
 pub use parser::UriParse;
 pub use redact::{Redacted, Redaction, UriRedact, UserMask};
-pub use sip_uri::{Scheme, SipUri, SipUriParts};
-pub use tel_uri::{TelUri, TelUriParts};
-pub use uri::{OtherUri, Uri};
-pub use urn_uri::{UrnUri, UrnUriParts};
+pub use sip_uri_types;
+pub use sip_uri_types::{
+    decode_user, encode_uri_header, Bare, Host, Hostname, OtherUri, Scheme, SipUri, SipUriParts,
+    TelUri, TelUriParts, Uri, UrnUri, UrnUriParts,
+};
 pub use warning::{Component, ParseWarning, Parsed, WarningCode, WarningKind};

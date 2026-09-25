@@ -6,9 +6,9 @@ use crate::sip_uri::SipUri;
 use crate::tel_uri::TelUri;
 use crate::urn_uri::UrnUri;
 
-/// A parsed URI: SIP/SIPS, tel, URN, or an opaque URI with an unrecognized scheme.
+/// A URI: SIP/SIPS, tel, URN, or an opaque URI with an unrecognized scheme.
 ///
-/// The `Other` variant keeps text this crate does not parse (e.g. `http:`,
+/// The `Other` variant keeps text without a structure of its own (e.g. `http:`,
 /// `https:`, `data:`, or text without a scheme), so header values like
 /// `Call-Info` round-trip without rejecting non-SIP URIs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -40,10 +40,11 @@ impl OtherUri {
     /// every other byte, `%` included, is kept as sent.
     ///
     /// `None` when the scheme is outside the RFC 3986 grammar or is `sip`,
-    /// `sips`, `tel` or `urn`, which have their own types, or when there is neither scheme nor text.
+    /// `sips`, `tel` or `urn`, which have their own types, or when there is
+    /// neither scheme nor text.
     ///
     /// ```
-    /// use sip_uri::OtherUri;
+    /// use sip_uri_types::OtherUri;
     ///
     /// let uri = OtherUri::new(Some("HTTPS"), "//example.com/a b").unwrap();
     /// assert_eq!(uri.as_str(), "https://example.com/a%20b");
@@ -72,6 +73,14 @@ impl OtherUri {
     pub fn scheme(&self) -> Option<&str> {
         self.scheme_end
             .map(|end| &self.raw[..end])
+    }
+
+    /// The text after the scheme's `:`, or the whole text without a scheme.
+    pub fn rest(&self) -> &str {
+        let start = self
+            .scheme_end
+            .map_or(0, |end| end + 1);
+        &self.raw[start..]
     }
 }
 
@@ -215,6 +224,8 @@ mod tests {
         let bare = OtherUri::new(None, "*").unwrap();
         assert_eq!(bare.scheme(), None);
         assert_eq!(bare.as_str(), "*");
+        assert_eq!(bare.rest(), "*");
+        assert_eq!(other.rest(), "//example.com");
         assert_eq!(OtherUri::new(None, ""), None);
     }
 
@@ -225,11 +236,7 @@ mod tests {
             other.as_str(),
             "http://x%0D%0AVia:%20%3Cy%3E%20%22%C3%A9%22%20%zz"
         );
-        let rest = other
-            .as_str()
-            .strip_prefix("http:")
-            .unwrap();
-        assert_eq!(OtherUri::new(Some("http"), rest), Some(other.clone()));
+        assert_eq!(OtherUri::new(Some("http"), other.rest()), Some(other));
         assert_eq!(
             OtherUri::new(None, "a\u{7f}b")
                 .unwrap()

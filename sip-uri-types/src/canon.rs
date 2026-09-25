@@ -272,7 +272,7 @@ pub(crate) fn canonize_other(input: &str) -> String {
 /// Returns [`Cow::Borrowed`] when the input contains no `%`.
 ///
 /// ```
-/// use sip_uri::decode_user;
+/// use sip_uri_types::decode_user;
 ///
 /// let decoded = decode_user("%2B15551234567");
 /// assert_eq!(String::from_utf8_lossy(&decoded), "+15551234567");

@@ -179,6 +179,37 @@ mod tests {
         }
     }
 
+    /// Every scheme of up to four letters, the length of each known one.
+    fn short_schemes() -> impl Iterator<Item = String> {
+        (1..=4u32).flat_map(|len| {
+            (0..26usize.pow(len)).map(move |mut n| {
+                let mut s = String::new();
+                for _ in 0..len {
+                    s.push(char::from(b'a' + (n % 26) as u8));
+                    n /= 26;
+                }
+                s
+            })
+        })
+    }
+
+    #[test]
+    fn known_schemes_are_the_ones_other_uri_refuses() {
+        assert!(KNOWN_SCHEMES
+            .iter()
+            .all(|k| k.len() <= 4));
+        let mut refused: Vec<String> = short_schemes()
+            .filter(|s| sip_uri_types::OtherUri::new(Some(s), "x").is_none())
+            .collect();
+        refused.sort_unstable();
+        let mut known: Vec<String> = KNOWN_SCHEMES
+            .iter()
+            .map(|k| k.to_string())
+            .collect();
+        known.sort_unstable();
+        assert_eq!(refused, known);
+    }
+
     #[test]
     fn find_at_basic() {
         assert_eq!(find_userinfo_at("user@host"), Some(4));

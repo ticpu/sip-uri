@@ -1,8 +1,8 @@
 use std::fmt;
 
-use crate::sip_uri::SipUri;
-use crate::tel_uri::TelUri;
-use crate::uri::Uri;
+use sip_uri_types::SipUri;
+use sip_uri_types::TelUri;
+use sip_uri_types::Uri;
 
 const MASK: &str = "***";
 

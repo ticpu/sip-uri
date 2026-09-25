@@ -1,8 +1,9 @@
 use crate::grammar::{
     is_hnv_char, is_param_strict, is_tel_paramchar, is_tel_pname_char, is_user_char,
 };
-use crate::params::Params;
 use crate::warning::{Component, WarningCode, Warnings};
+
+pub(crate) type Params = Vec<(String, Option<String>)>;
 
 /// Character sets for one kind of `;`-separated param list.
 pub(crate) struct ParamGrammar {

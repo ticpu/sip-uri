@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::grammar::{self, SchemeSplit};
-use crate::urn_uri::{UrnUri, UrnUriParts};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
+use sip_uri_types::{UrnUri, UrnUriParts};
 
 /// RFC 8141: `NID = (alphanum) 0*30(ldh) (alphanum)` where `ldh = alphanum / "-"`.
 fn is_valid_nid(nid: &str) -> bool {

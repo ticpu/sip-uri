@@ -2,8 +2,8 @@ use super::host::parse_from_uri;
 use super::params::{self, parse_headers, parse_params};
 use crate::error::ParseError;
 use crate::grammar::{self, SchemeSplit};
-use crate::sip_uri::{Scheme, SipUri, SipUriParts};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
+use sip_uri_types::{Scheme, SipUri, SipUriParts};
 
 pub(crate) fn parse(input: &str) -> Result<Parsed<SipUri>, ParseError> {
     if input.is_empty() {
@@ -190,8 +190,8 @@ fn split_hostport_params_headers(s: &str, parts: &mut SipUriParts, warnings: &mu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::host::Host;
     use crate::UriParse;
+    use sip_uri_types::Host;
     use std::net::Ipv4Addr;
 
     #[test]

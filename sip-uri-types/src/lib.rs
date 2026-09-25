@@ -1,3 +1,71 @@
 //! SIP/SIPS, tel: and URN URI values, each component held in canonical form.
 //!
 //! Parse text into these types with [sip-uri](https://docs.rs/sip-uri).
+//!
+//! ```
+//! use sip_uri_types::{Host, SipUri, TelUri};
+//!
+//! let uri = SipUri::new(Host::Hostname("example.com".into()))
+//!     .with_user("+15551234567")
+//!     .with_param("user", Some("phone".into()));
+//! assert_eq!(uri.to_string(), "sip:+15551234567@example.com;user=phone");
+//!
+//! let tel = TelUri::new("+1555 123");
+//! assert_eq!(tel.number(), Some("+1555%20123"));
+//! ```
+//!
+//! # Canonical form
+//!
+//! Each component keeps its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase `%XX`, whichever path built the value. An escaped reserved character stays escaped, so `%2B1` and `+1` are distinct users.
+//!
+//! Builders and parts structs take URI text, not logical values: a well-formed `%XX` in it is read as an escape, never re-encoded. `with_user("%2B1")` holds `%2B1`; [`decode_user`] gives the logical bytes.
+//!
+//! Hostnames are lowercased as ASCII only, with no IDNA and no non-ASCII case folding. An IPv6 address renders as [`std::net::Ipv6Addr`] displays it, and an IPv6 zone ID is not representable.
+//!
+//! # Equality
+//!
+//! `Eq` and `Hash` compare the canonical form component by component. That is identity, never RFC 3261 §19.1.4 or RFC 8141 equivalence: param order, param and header name case, a tel: number's visual separators, a hostname's trailing dot and a URN's r-, q- and f-components all count.
+//!
+//! # Stability
+//!
+//! The URI kinds with their own type are fixed for 1.x: a URI with any other scheme is [`Uri::Other`].
+//!
+//! The minimum supported Rust version is 1.70, 1.71 with the `serde` feature. Raising it is a minor release.
+
+mod canon;
+mod host;
+mod params;
+mod sip_uri;
+mod tel_uri;
+mod uri;
+mod urn_uri;
+
+pub use canon::{decode_user, encode_uri_header};
+pub use host::{Bare, Host, Hostname};
+pub use sip_uri::{Scheme, SipUri, SipUriParts};
+pub use tel_uri::{TelUri, TelUriParts};
+pub use uri::{OtherUri, Uri};
+pub use urn_uri::{UrnUri, UrnUriParts};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn is_send_sync_unpin<T: Send + Sync + Unpin>() {}
+
+    #[test]
+    fn data_types_are_send_sync_unpin() {
+        is_send_sync_unpin::<Uri>();
+        is_send_sync_unpin::<SipUri>();
+        is_send_sync_unpin::<SipUriParts>();
+        is_send_sync_unpin::<TelUri>();
+        is_send_sync_unpin::<TelUriParts>();
+        is_send_sync_unpin::<UrnUri>();
+        is_send_sync_unpin::<UrnUriParts>();
+        is_send_sync_unpin::<OtherUri>();
+        is_send_sync_unpin::<Host>();
+        is_send_sync_unpin::<Hostname>();
+        is_send_sync_unpin::<Bare<'static>>();
+        is_send_sync_unpin::<Scheme>();
+    }
+}

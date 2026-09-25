@@ -1,8 +1,8 @@
 use super::params::{self, parse_params};
 use crate::error::ParseError;
 use crate::grammar::{self, SchemeSplit};
-use crate::tel_uri::{TelUri, TelUriParts};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
+use sip_uri_types::{TelUri, TelUriParts};
 
 /// RFC 3966: `phonedigit = DIGIT / visual-separator`
 /// `visual-separator = "-" / "." / "(" / ")"`

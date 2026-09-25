@@ -82,7 +82,7 @@ impl Host {
     ///
     /// ```
     /// use std::net::Ipv4Addr;
-    /// use sip_uri::Host;
+    /// use sip_uri_types::Host;
     ///
     /// assert_eq!(
     ///     Host::from_hostname("198.51.100.1"),
@@ -110,7 +110,7 @@ impl Host {
     /// no brackets at all (SDP connection lines, URI parameter values, log text).
     ///
     /// ```
-    /// use sip_uri::Host;
+    /// use sip_uri_types::Host;
     ///
     /// let host = Host::IPv6("2001:db8::1".parse().unwrap());
     /// assert_eq!(host.to_string(), "[2001:db8::1]");
