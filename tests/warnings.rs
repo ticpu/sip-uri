@@ -499,3 +499,34 @@ fn missing_scheme_keeps_user_and_host() {
         WarningCode::MissingScheme,
     );
 }
+
+#[test]
+fn strict_rejects_what_lenient_warns_about() {
+    assert_eq!(
+        SipUri::parse_strict("sip:example.com:+5060"),
+        Err(sip_uri::ParseError::NonConformant(
+            SipUri::parse_with_warnings("sip:example.com:+5060")
+                .unwrap()
+                .warnings[0]
+        ))
+    );
+    assert!(SipUri::parse_strict("sip:alice@example.com").is_ok());
+    assert!(TelUri::parse_strict("tel:911").is_err());
+    assert!(UrnUri::parse_strict("urn:x:foo").is_err());
+    assert!(Uri::parse_strict("<sip:alice@example.com>").is_err());
+    assert!(Host::parse_strict("example.com:5060").is_err());
+    assert_eq!(SipUri::parse_strict(""), Err(sip_uri::ParseError::Empty));
+    assert_eq!(
+        SipUri::parse_strict("tel:+15551234567"),
+        Err(sip_uri::ParseError::SchemeMismatch)
+    );
+}
+
+#[test]
+fn errors_never_quote_input() {
+    let err = SipUri::parse_strict("sip:+15551234567@example.com:+5060").unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "non-conformant URI: port: signed port at byte 29"
+    );
+}

@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::error::ParseError;
 use crate::parse::validate_pct_encoded;
 
 /// A parse result together with the non-conformance found on the way.
@@ -21,6 +22,17 @@ impl<T> Parsed<T> {
         !self
             .warnings
             .is_empty()
+    }
+
+    /// The value, or the first warning as [`ParseError::NonConformant`].
+    pub fn into_strict(self) -> Result<T, ParseError> {
+        match self
+            .warnings
+            .first()
+        {
+            Some(w) => Err(ParseError::NonConformant(*w)),
+            None => Ok(self.value),
+        }
     }
 }
 

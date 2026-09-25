@@ -2,7 +2,7 @@ use std::fmt;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
-use crate::error::ParseHostError;
+use crate::error::ParseError;
 use crate::parse;
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
@@ -200,7 +200,7 @@ impl fmt::Display for Bare<'_> {
 /// assert!("[2001:db8::1".parse::<Host>().is_err());
 /// ```
 impl FromStr for Host {
-    type Err = ParseHostError;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::parse_with_warnings(s).map(|parsed| parsed.value)
@@ -208,9 +208,14 @@ impl FromStr for Host {
 }
 
 impl Host {
+    /// Parse, rejecting any grammar breach as [`ParseError::NonConformant`].
+    pub fn parse_strict(input: &str) -> Result<Self, ParseError> {
+        Self::parse_with_warnings(input)?.into_strict()
+    }
+
     /// Parse a complete host as [`FromStr`] does, reporting accepted grammar
     /// breaches beside the value.
-    pub fn parse_with_warnings(s: &str) -> Result<Parsed<Self>, ParseHostError> {
+    pub fn parse_with_warnings(s: &str) -> Result<Parsed<Self>, ParseError> {
         let mut warnings = Warnings::new(s);
         // A bare IPv6 has to be recognized up front: the URI parser stops the
         // host at the first `:`, which is inside the address here.
@@ -222,7 +227,7 @@ impl Host {
 
         let (host, consumed) = Host::parse_from_uri(s, &mut warnings);
         let Some(host) = host else {
-            return Err(ParseHostError("no readable host".into()));
+            return Err(ParseError::Empty);
         };
         if consumed != s.len() {
             warnings.push(Component::Host, WarningCode::TrailingContent, s, consumed);

@@ -1,79 +1,33 @@
 use std::fmt;
 
-/// Error returned when parsing a SIP or SIPS URI fails.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseSipUriError(pub String);
+use crate::warning::ParseWarning;
 
-impl fmt::Display for ParseSipUriError {
+/// Error returned by every parser in this crate.
+///
+/// Lenient parsing fails only on [`Empty`](ParseError::Empty) and
+/// [`SchemeMismatch`](ParseError::SchemeMismatch); strict parsing also
+/// returns the first grammar breach as
+/// [`NonConformant`](ParseError::NonConformant). Display never quotes the
+/// input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ParseError {
+    /// The input is empty, or holds nothing this type can represent.
+    Empty,
+    /// The input's scheme names another kind of URI.
+    SchemeMismatch,
+    /// A strict parse met a grammar breach.
+    NonConformant(ParseWarning),
+}
+
+impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid SIP URI: {}", self.0)
+        match self {
+            ParseError::Empty => f.write_str("empty input"),
+            ParseError::SchemeMismatch => f.write_str("scheme belongs to another URI type"),
+            ParseError::NonConformant(w) => write!(f, "non-conformant URI: {w}"),
+        }
     }
 }
 
-impl std::error::Error for ParseSipUriError {}
-
-/// Error returned when parsing a tel: URI fails.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseTelUriError(pub String);
-
-impl fmt::Display for ParseTelUriError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid tel URI: {}", self.0)
-    }
-}
-
-impl std::error::Error for ParseTelUriError {}
-
-/// Error returned when parsing a [`Uri`](crate::Uri) fails.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseUriError(pub String);
-
-impl fmt::Display for ParseUriError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid URI: {}", self.0)
-    }
-}
-
-impl std::error::Error for ParseUriError {}
-
-impl From<ParseSipUriError> for ParseUriError {
-    fn from(e: ParseSipUriError) -> Self {
-        ParseUriError(e.0)
-    }
-}
-
-impl From<ParseTelUriError> for ParseUriError {
-    fn from(e: ParseTelUriError) -> Self {
-        ParseUriError(e.0)
-    }
-}
-
-/// Error returned when parsing a URN fails.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseUrnError(pub String);
-
-impl fmt::Display for ParseUrnError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid URN: {}", self.0)
-    }
-}
-
-impl std::error::Error for ParseUrnError {}
-
-impl From<ParseUrnError> for ParseUriError {
-    fn from(e: ParseUrnError) -> Self {
-        ParseUriError(e.0)
-    }
-}
-
-/// Error returned when parsing a standalone [`Host`](crate::Host) fails.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseHostError(pub String);
-
-impl fmt::Display for ParseHostError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid host: {}", self.0)
-    }
-}
-
-impl std::error::Error for ParseHostError {}
+impl std::error::Error for ParseError {}

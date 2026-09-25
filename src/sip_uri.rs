@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use crate::error::ParseSipUriError;
+use crate::error::ParseError;
 use crate::host::Host;
 use crate::params;
 use crate::parse::{self, SchemeSplit};
@@ -218,7 +218,7 @@ impl SipUri {
 }
 
 impl FromStr for SipUri {
-    type Err = ParseSipUriError;
+    type Err = ParseError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         Self::parse_with_warnings(input).map(|parsed| parsed.value)
@@ -226,6 +226,11 @@ impl FromStr for SipUri {
 }
 
 impl SipUri {
+    /// Parse, rejecting any grammar breach as [`ParseError::NonConformant`].
+    pub fn parse_strict(input: &str) -> Result<Self, ParseError> {
+        Self::parse_with_warnings(input)?.into_strict()
+    }
+
     /// Parse, reporting accepted grammar breaches beside the value.
     ///
     /// Accepts exactly what [`FromStr`] accepts: everything except empty
@@ -238,10 +243,9 @@ impl SipUri {
     /// assert_eq!(parsed.value.port(), Some(5060));
     /// assert_eq!(parsed.warnings[0].code, WarningCode::SignedPort);
     /// ```
-    pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseSipUriError> {
-        let err = |msg: &str| ParseSipUriError(msg.to_string());
+    pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseError> {
         if input.is_empty() {
-            return Err(err("empty input"));
+            return Err(ParseError::Empty);
         }
         let mut warnings = Warnings::new(input);
 
@@ -252,7 +256,7 @@ impl SipUri {
             SchemeSplit::Named(s, rest) if s.eq_ignore_ascii_case("sips") => {
                 (Some(Scheme::Sips), rest)
             }
-            SchemeSplit::Named(..) => return Err(err("scheme is not sip or sips")),
+            SchemeSplit::Named(..) => return Err(ParseError::SchemeMismatch),
             SchemeSplit::Invalid => {
                 warnings.push(Component::Scheme, WarningCode::InvalidScheme, input, 0);
                 (None, input)

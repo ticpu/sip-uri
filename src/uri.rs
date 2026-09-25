@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use crate::error::ParseUriError;
+use crate::error::ParseError;
 use crate::parse::{self, SchemeSplit};
 use crate::sip_uri::Scheme;
 use crate::sip_uri::SipUri;
@@ -141,7 +141,7 @@ impl From<UrnUri> for Uri {
 }
 
 impl FromStr for Uri {
-    type Err = ParseUriError;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::parse_with_warnings(s).map(|parsed| parsed.value)
@@ -149,13 +149,18 @@ impl FromStr for Uri {
 }
 
 impl Uri {
+    /// Parse, rejecting any grammar breach as [`ParseError::NonConformant`].
+    pub fn parse_strict(input: &str) -> Result<Self, ParseError> {
+        Self::parse_with_warnings(input)?.into_strict()
+    }
+
     /// Parse, reporting accepted grammar breaches beside the value.
     ///
     /// Accepts exactly what [`FromStr`] accepts: everything but empty input.
     /// Input without a scheme, or with one outside the RFC 3986 grammar such
     /// as a URI still wrapped in `<>`, is kept as [`Uri::Other`] with a
     /// warning.
-    pub fn parse_with_warnings(s: &str) -> Result<Parsed<Self>, ParseUriError> {
+    pub fn parse_with_warnings(s: &str) -> Result<Parsed<Self>, ParseError> {
         fn wrap<T>(parsed: Parsed<T>, variant: fn(T) -> Uri) -> Parsed<Uri> {
             Parsed {
                 value: variant(parsed.value),
@@ -164,7 +169,7 @@ impl Uri {
         }
 
         if s.is_empty() {
-            return Err(ParseUriError("empty input".into()));
+            return Err(ParseError::Empty);
         }
         let mut warnings = Warnings::new(s);
         match parse::split_scheme(s) {
