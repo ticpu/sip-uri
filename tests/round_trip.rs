@@ -1356,6 +1356,25 @@ fn other_uri_new_matches_parsed_other() {
 }
 
 #[test]
+fn equal_uris_hash_equal() {
+    let set: std::collections::HashSet<Uri> = [
+        "sip:alice@example.com?From=a@example.org",
+        "SIP:%61lice@EXAMPLE.com?From=a%40example.org",
+        "tel:+15551234567;cpc=emergency",
+        "tel:+15551234567;cpc=%65mergency",
+        "urn:SERVICE:sos",
+        "urn:service:sos",
+    ]
+    .iter()
+    .map(|s| {
+        s.parse()
+            .unwrap()
+    })
+    .collect();
+    assert_eq!(set.len(), 3);
+}
+
+#[test]
 fn builder_canonization_is_idempotent() {
     let uri: SipUri = "sip:%61lice;x=a%3Bb@example.com;p=%41"
         .parse()

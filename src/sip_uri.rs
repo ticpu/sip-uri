@@ -9,7 +9,7 @@ use crate::params::{self, Params};
 /// Supports the full grammar including user-params (`;` within userinfo),
 /// password, IPv6 hosts, URI parameters, and headers. A scheme or host that
 /// is missing or unreadable is `None`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct SipUri {
     scheme: Option<Scheme>,

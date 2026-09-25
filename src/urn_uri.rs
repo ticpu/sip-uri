@@ -10,7 +10,7 @@ use crate::canon;
 /// The NID is stored lowercase per RFC 8141 equivalence rules. No component
 /// decodes an escape; escape hex is uppercase, and a byte outside the
 /// component's grammar is escaped. A missing NID or NSS is `None`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct UrnUri {
     nid: Option<String>,

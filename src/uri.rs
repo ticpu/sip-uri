@@ -11,7 +11,7 @@ use crate::urn_uri::UrnUri;
 /// The `Other` variant keeps text this crate does not parse (e.g. `http:`,
 /// `https:`, `data:`, or text without a scheme), so header values like
 /// `Call-Info` round-trip without rejecting non-SIP URIs.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Uri {
     /// SIP or SIPS URI.

@@ -44,7 +44,7 @@ sip-uri = "0.3"
 | `Redaction` | What `redacted()` masks when a URI is rendered for logs |
 | `Scheme` | `Sip` or `Sips` |
 
-All types implement `FromStr`, `Display`, `Debug`, `Clone`, `PartialEq`, and `Eq`.
+The URI and host types implement `FromStr`, `Display`, `Debug`, `Clone`, `PartialEq`, `Eq` and `Hash`.
 Schemes and hosts are case-insensitive and stored lowercase; parameter and
 header lookup is case-insensitive. `PartialEq` is structural, not RFC 3261
 §19.1.4 URI equivalence: parameter order and name case count. `Display` emits

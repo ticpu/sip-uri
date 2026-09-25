@@ -9,7 +9,7 @@ use crate::params;
 /// Global numbers start with `+`. A local number without the `phone-context`
 /// parameter RFC 3966 requires is still a value, and a missing number is
 /// `None`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct TelUri {
     number: Option<String>,
