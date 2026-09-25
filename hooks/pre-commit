@@ -23,20 +23,20 @@ if ! cargo fmt --all -- --check; then
 fi
 
 echo "Running cargo clippy..."
-if ! cargo clippy --all-targets --message-format=short -- -D warnings; then
+if ! cargo clippy --workspace --all-targets --all-features --message-format=short -- -D warnings; then
     echo "Clippy found warnings. Fix them before committing."
     exit 1
 fi
 
 echo "Checking documentation coverage..."
-if ! doc_output=$(RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" cargo doc --no-deps 2>&1); then
+if ! doc_output=$(RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" cargo doc --workspace --all-features --no-deps 2>&1); then
     echo "$doc_output" | grep '^error' | head -20
-    echo "Documentation errors. Run: RUSTDOCFLAGS='-D missing_docs -D rustdoc::broken_intra_doc_links' cargo doc --no-deps"
+    echo "Documentation errors. Run: RUSTDOCFLAGS='-D missing_docs -D rustdoc::broken_intra_doc_links' cargo doc --workspace --all-features --no-deps"
     exit 1
 fi
 
 echo "Running tests..."
-if ! test_output=$(cargo test 2>&1); then
+if ! test_output=$(cargo test --workspace --all-features 2>&1); then
     echo "$test_output" | tail
     echo "Tests failed. Fix them before committing."
     exit 1

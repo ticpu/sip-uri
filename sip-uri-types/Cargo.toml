@@ -1,0 +1,15 @@
+[package]
+name = "sip-uri-types"
+version = "1.0.0-rc.1"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "SIP/SIPS, tel: and URN URI value types in canonical form, parsed by sip-uri"
+license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/sip-uri-types"
+readme = "README.md"
+keywords = ["sip", "uri", "voip", "tel", "urn"]
+categories = ["data-structures", "network-programming"]
+
+[dependencies]

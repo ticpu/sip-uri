@@ -1,12 +1,23 @@
-[package]
-name = "sip-uri"
-version = "0.2.9"
+[workspace]
+members = ["sip-uri-types"]
+default-members = [".", "sip-uri-types"]
+
+[workspace.package]
 edition = "2021"
 rust-version = "1.70"
 authors = ["Jérôme Poulin <jeromepoulin@gmail.com>"]
-description = "RFC 3261 SIP/SIPS, RFC 3966 tel:, and RFC 8141 URN parser with zero dependencies"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ticpu/sip-uri"
+
+[package]
+name = "sip-uri"
+version = "0.2.9"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "RFC 3261 SIP/SIPS, RFC 3966 tel:, and RFC 8141 URN parser with zero dependencies"
+license.workspace = true
+repository.workspace = true
 documentation = "https://docs.rs/sip-uri"
 readme = "README.md"
 keywords = ["sip", "uri", "voip", "tel", "urn"]

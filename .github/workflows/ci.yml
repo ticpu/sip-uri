@@ -25,7 +25,10 @@ jobs:
         toolchain: ${{ env.MSRV }}
 
     - name: Check
-      run: cargo check
+      run: cargo check --workspace
+
+    - name: Check with all features
+      run: cargo check --workspace --all-features
 
   test:
     runs-on: ubuntu-latest
@@ -48,22 +51,22 @@ jobs:
           ~/.cargo/git/db/
           target/
         # Cargo.lock is not tracked on branches, so the manifest and toolchain key the cache.
-        key: ${{ runner.os }}-cargo-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('Cargo.toml') }}
+        key: ${{ runner.os }}-cargo-${{ steps.toolchain.outputs.cachekey }}-${{ hashFiles('**/Cargo.toml') }}
 
     - name: Check
-      run: cargo check --all-targets
+      run: cargo check --workspace --all-targets --all-features
 
     - name: Clippy
-      run: cargo clippy --all-targets -- -D warnings
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
     - name: Docs
-      run: RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" cargo doc --no-deps
+      run: RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" cargo doc --workspace --all-features --no-deps
 
     - name: Test
-      run: cargo test
+      run: cargo test --workspace --all-features
 
     - name: Build
-      run: cargo build --release --all-targets
+      run: cargo build --workspace --release --all-targets --all-features
 
     # The static build is how fs-sip-uri actually ships, so break here rather
     # than at deploy time.
