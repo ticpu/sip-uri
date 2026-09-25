@@ -134,11 +134,11 @@ pub(crate) fn format_headers(
 pub(crate) fn find_param<'a>(
     params: &'a [(String, Option<String>)],
     name: &str,
-) -> Option<&'a Option<String>> {
+) -> Option<Option<&'a str>> {
     params
         .iter()
         .find(|(n, _)| n.eq_ignore_ascii_case(name))
-        .map(|(_, v)| v)
+        .map(|(_, v)| v.as_deref())
 }
 
 #[cfg(test)]
@@ -192,8 +192,8 @@ mod tests {
             ("Transport".into(), Some("tcp".into())),
             ("user".into(), Some("phone".into())),
         ];
-        assert_eq!(find_param(&params, "transport"), Some(&Some("tcp".into())));
-        assert_eq!(find_param(&params, "USER"), Some(&Some("phone".into())));
+        assert_eq!(find_param(&params, "transport"), Some(Some("tcp")));
+        assert_eq!(find_param(&params, "USER"), Some(Some("phone")));
         assert_eq!(find_param(&params, "missing"), None);
     }
 }

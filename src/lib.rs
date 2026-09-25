@@ -12,7 +12,7 @@
 //! // Parse a SIP URI
 //! let uri: SipUri = "sip:alice@example.com;transport=tcp".parse().unwrap();
 //! assert_eq!(uri.user(), Some("alice"));
-//! assert_eq!(uri.param("transport"), Some(&Some("tcp".to_string())));
+//! assert_eq!(uri.param("transport"), Some(Some("tcp")));
 //!
 //! // Parse a tel: URI
 //! let tel: TelUri = "tel:+15551234567;cpc=emergency".parse().unwrap();

@@ -167,8 +167,13 @@ impl SipUri {
     }
 
     /// Look up a URI parameter by name (case-insensitive).
-    pub fn param(&self, name: &str) -> Option<&Option<String>> {
+    pub fn param(&self, name: &str) -> Option<Option<&str>> {
         params::find_param(&self.params, name)
+    }
+
+    /// Look up a user-param by name (case-insensitive).
+    pub fn user_param(&self, name: &str) -> Option<Option<&str>> {
+        params::find_param(&self.user_params, name)
     }
 
     /// URI headers (after `?`).
@@ -625,8 +630,8 @@ mod tests {
         let uri: SipUri = "sip:u:p@host:5060;maddr=127.0.0.1;transport=tcp"
             .parse()
             .unwrap();
-        assert_eq!(uri.param("transport"), Some(&Some("tcp".into())));
-        assert_eq!(uri.param("maddr"), Some(&Some("127.0.0.1".into())));
+        assert_eq!(uri.param("transport"), Some(Some("tcp")));
+        assert_eq!(uri.param("maddr"), Some(Some("127.0.0.1")));
     }
 
     #[test]
@@ -634,8 +639,8 @@ mod tests {
         let uri: SipUri = "sip:u:p@host:5060;user=phone;ttl=1;isfocus"
             .parse()
             .unwrap();
-        assert_eq!(uri.param("user"), Some(&Some("phone".into())));
-        assert_eq!(uri.param("isfocus"), Some(&None));
+        assert_eq!(uri.param("user"), Some(Some("phone")));
+        assert_eq!(uri.param("isfocus"), Some(None));
     }
 
     #[test]
@@ -716,6 +721,6 @@ mod tests {
             .unwrap();
         assert_eq!(uri.user(), None);
         assert_eq!(uri.port(), Some(5060));
-        assert_eq!(uri.param("transport"), Some(&Some("udp".into())));
+        assert_eq!(uri.param("transport"), Some(Some("udp")));
     }
 }

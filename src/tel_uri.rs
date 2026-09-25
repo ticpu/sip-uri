@@ -59,7 +59,7 @@ impl TelUri {
     }
 
     /// Look up a parameter by name (case-insensitive).
-    pub fn param(&self, name: &str) -> Option<&Option<String>> {
+    pub fn param(&self, name: &str) -> Option<Option<&str>> {
         params::find_param(&self.params, name)
     }
 
@@ -266,10 +266,7 @@ mod tests {
             .parse()
             .unwrap();
         assert_eq!(uri.number(), Some("1411"));
-        assert_eq!(
-            uri.param("phone-context"),
-            Some(&Some("example.com".into()))
-        );
+        assert_eq!(uri.param("phone-context"), Some(Some("example.com")));
     }
 
     #[test]
@@ -333,7 +330,7 @@ mod tests {
         let uri: TelUri = "tel:+12345678;oli"
             .parse()
             .unwrap();
-        assert_eq!(uri.param("oli"), Some(&None));
+        assert_eq!(uri.param("oli"), Some(None));
     }
 
     #[test]

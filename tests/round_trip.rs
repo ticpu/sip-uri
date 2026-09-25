@@ -148,8 +148,8 @@ fn sofia_transport_and_maddr_params() {
     let uri: SipUri = "sip:u:p@host:5060;maddr=127.0.0.1;transport=tcp"
         .parse()
         .unwrap();
-    assert_eq!(uri.param("transport"), Some(&Some("tcp".into())));
-    assert_eq!(uri.param("maddr"), Some(&Some("127.0.0.1".into())));
+    assert_eq!(uri.param("transport"), Some(Some("tcp")));
+    assert_eq!(uri.param("maddr"), Some(Some("127.0.0.1")));
 }
 
 #[test]
@@ -157,9 +157,9 @@ fn sofia_param_without_value() {
     let uri: SipUri = "sip:u:p@host:5060;user=phone;ttl=1;isfocus"
         .parse()
         .unwrap();
-    assert_eq!(uri.param("user"), Some(&Some("phone".into())));
-    assert_eq!(uri.param("ttl"), Some(&Some("1".into())));
-    assert_eq!(uri.param("isfocus"), Some(&None));
+    assert_eq!(uri.param("user"), Some(Some("phone")));
+    assert_eq!(uri.param("ttl"), Some(Some("1")));
+    assert_eq!(uri.param("isfocus"), Some(None));
 }
 
 // ========================================================================
@@ -288,7 +288,7 @@ fn ng911_user_params_ipv4_user_phone() {
         sip.host(),
         Some(&Host::IPv4(Ipv4Addr::new(198, 51, 100, 1)))
     );
-    assert_eq!(sip.param("user"), Some(&Some("phone".into())));
+    assert_eq!(sip.param("user"), Some(Some("phone")));
 }
 
 #[test]
@@ -297,7 +297,7 @@ fn ng911_participantid() {
         .parse()
         .unwrap();
     assert_eq!(uri.user(), Some("+15551234567"));
-    assert_eq!(uri.param("participantid"), Some(&Some("abc123".into())));
+    assert_eq!(uri.param("participantid"), Some(Some("abc123")));
 }
 
 #[test]
@@ -311,7 +311,7 @@ fn ng911_participantid_no_user_part() {
             .unwrap(),
         &Host::Hostname("sip.bcf.qc.core.ng.example.com".into())
     );
-    assert_eq!(uri.param("participantid"), Some(&Some("2".into())));
+    assert_eq!(uri.param("participantid"), Some(Some("2")));
     assert_eq!(
         uri.to_string(),
         "sip:sip.bcf.qc.core.ng.example.com;participantid=2"
@@ -324,8 +324,8 @@ fn ng911_participantid_no_user_part_extra_params() {
         .parse()
         .unwrap();
     assert_eq!(uri.user(), None);
-    assert_eq!(uri.param("participantid"), Some(&Some("2".into())));
-    assert_eq!(uri.param("user"), Some(&Some("phone".into())));
+    assert_eq!(uri.param("participantid"), Some(Some("2")));
+    assert_eq!(uri.param("user"), Some(Some("phone")));
 }
 
 #[test]
@@ -333,10 +333,7 @@ fn ng911_participantid_non_word_value() {
     let uri: SipUri = "sip:sip.bcf.qc.core.ng.example.com;participantid=9f8e7d6c-1234"
         .parse()
         .unwrap();
-    assert_eq!(
-        uri.param("participantid"),
-        Some(&Some("9f8e7d6c-1234".into()))
-    );
+    assert_eq!(uri.param("participantid"), Some(Some("9f8e7d6c-1234")));
 }
 
 // Appending `@host` to a host-only URI yields a valid URI whose user part is a
@@ -363,7 +360,7 @@ fn ng911_user_phone() {
         .parse()
         .unwrap();
     assert_eq!(sip.user(), Some("1305"));
-    assert_eq!(sip.param("user"), Some(&Some("phone".into())));
+    assert_eq!(sip.param("user"), Some(Some("phone")));
 }
 
 #[test]
@@ -382,7 +379,7 @@ fn ng911_ipv6_with_port() {
         )
     );
     assert_eq!(uri.port(), Some(5061));
-    assert_eq!(uri.param("user"), Some(&Some("phone".into())));
+    assert_eq!(uri.param("user"), Some(Some("phone")));
 }
 
 #[test]
@@ -448,7 +445,7 @@ fn ng911_tel_with_cpc_emergency() {
         .parse()
         .unwrap();
     assert_eq!(tel.number(), Some("+15551234567"));
-    assert_eq!(tel.param("cpc"), Some(&Some("emergency".into())));
+    assert_eq!(tel.param("cpc"), Some(Some("emergency")));
 }
 
 #[test]
@@ -456,8 +453,8 @@ fn ng911_tel_param_without_value() {
     let tel: TelUri = "tel:+15551234567;cpc=emergency;oli"
         .parse()
         .unwrap();
-    assert_eq!(tel.param("cpc"), Some(&Some("emergency".into())));
-    assert_eq!(tel.param("oli"), Some(&None));
+    assert_eq!(tel.param("cpc"), Some(Some("emergency")));
+    assert_eq!(tel.param("oli"), Some(None));
 }
 
 // ========================================================================
@@ -594,7 +591,7 @@ fn ng911_multiple_userparams() {
         ("cpc".into(), Some("emergency".into()))
     );
     assert_eq!(uri.user_params()[1], ("oli".into(), Some("0".into())));
-    assert_eq!(uri.param("user"), Some(&Some("phone".into())));
+    assert_eq!(uri.param("user"), Some(Some("phone")));
 }
 
 #[test]
@@ -610,8 +607,8 @@ fn ng911_multiple_params_and_headers() {
             .len(),
         2
     );
-    assert_eq!(uri.param("transport"), Some(&Some("tcp".into())));
-    assert_eq!(uri.param("method"), Some(&Some("REGISTER".into())));
+    assert_eq!(uri.param("transport"), Some(Some("tcp")));
+    assert_eq!(uri.param("method"), Some(Some("REGISTER")));
     assert_eq!(
         uri.headers()
             .len(),
@@ -630,7 +627,7 @@ fn ng911_ipv4_with_port() {
     assert_eq!(uri.user(), Some("1411"));
     assert_eq!(uri.host(), Some(&Host::IPv4(Ipv4Addr::new(10, 2, 2, 2))));
     assert_eq!(uri.port(), Some(5061));
-    assert_eq!(uri.param("user"), Some(&Some("phone".into())));
+    assert_eq!(uri.param("user"), Some(Some("phone")));
 }
 
 #[test]
@@ -686,7 +683,7 @@ fn ng911_tel_with_params() {
         .parse()
         .unwrap();
     assert_eq!(tel.number(), Some("+15559871234"));
-    assert_eq!(tel.param("cpc"), Some(&Some("emergency".into())));
+    assert_eq!(tel.param("cpc"), Some(Some("emergency")));
 }
 
 // ========================================================================
@@ -700,7 +697,7 @@ fn sofia_canonize_method_param() {
         .parse()
         .unwrap();
     assert_eq!(uri.user(), Some("pekka.pessi"));
-    assert_eq!(uri.param("method"), Some(&Some("MESSAGE".into())));
+    assert_eq!(uri.param("method"), Some(Some("MESSAGE")));
     // %20 is space, not unreserved, stays encoded in headers
     assert_eq!(uri.header("body"), Some("CANNED%20MSG"));
 }
@@ -714,7 +711,7 @@ fn sofia_full_with_fragment() {
     assert_eq!(uri.password(), Some("pass"));
     assert_eq!(uri.host(), Some(&Host::Hostname("host".into())));
     assert_eq!(uri.port(), Some(32));
-    assert_eq!(uri.param("param"), Some(&Some("1".into())));
+    assert_eq!(uri.param("param"), Some(Some("1")));
     assert_eq!(uri.header("From"), Some("foo%40bar"));
     assert_eq!(uri.header("To"), Some("bar%40baz"));
     assert_eq!(uri.fragment(), Some("unf"));
@@ -729,7 +726,7 @@ fn sip_fragment_after_params() {
     let uri: SipUri = "sip:alice@example.com;transport=tcp#section"
         .parse()
         .unwrap();
-    assert_eq!(uri.param("transport"), Some(&Some("tcp".into())));
+    assert_eq!(uri.param("transport"), Some(Some("tcp")));
     assert_eq!(uri.fragment(), Some("section"));
     assert_eq!(
         uri.to_string(),
@@ -760,7 +757,7 @@ fn tel_fragment_after_params() {
         .parse()
         .unwrap();
     assert_eq!(uri.number(), Some("+15551234567"));
-    assert_eq!(uri.param("cpc"), Some(&Some("emergency".into())));
+    assert_eq!(uri.param("cpc"), Some(Some("emergency")));
     assert_eq!(uri.fragment(), Some("context"));
     assert_eq!(uri.to_string(), "tel:+15551234567;cpc=emergency#context");
 }
@@ -781,7 +778,7 @@ fn sofia_double_semicolon_in_params() {
     let uri: SipUri = "sip:u:p@host;user=phone;;"
         .parse()
         .unwrap();
-    assert_eq!(uri.param("user"), Some(&Some("phone".into())));
+    assert_eq!(uri.param("user"), Some(Some("phone")));
     // The empty params between ;; are ignored
     assert_eq!(
         uri.params()
@@ -946,8 +943,8 @@ fn param_case_insensitive_lookup() {
     let uri: SipUri = "sip:host;Transport=TCP;User=phone"
         .parse()
         .unwrap();
-    assert_eq!(uri.param("transport"), Some(&Some("TCP".into())));
-    assert_eq!(uri.param("USER"), Some(&Some("phone".into())));
+    assert_eq!(uri.param("transport"), Some(Some("TCP")));
+    assert_eq!(uri.param("USER"), Some(Some("phone")));
 }
 
 #[test]
@@ -956,7 +953,7 @@ fn multiple_params_same_name() {
     let uri: SipUri = "sip:host;a=1;a=2"
         .parse()
         .unwrap();
-    assert_eq!(uri.param("a"), Some(&Some("1".into())));
+    assert_eq!(uri.param("a"), Some(Some("1")));
     assert_eq!(
         uri.params()
             .len(),

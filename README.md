@@ -12,7 +12,7 @@ use sip_uri::{SipUri, TelUri, UrnUri, Uri};
 let uri: SipUri = "sip:alice@example.com;transport=tcp".parse().unwrap();
 assert_eq!(uri.user(), Some("alice"));
 assert_eq!(uri.host().unwrap().to_string(), "example.com");
-assert_eq!(uri.param("transport"), Some(&Some("tcp".to_string())));
+assert_eq!(uri.param("transport"), Some(Some("tcp")));
 
 let tel: TelUri = "tel:+15551234567;cpc=emergency".parse().unwrap();
 assert_eq!(tel.number(), Some("+15551234567"));
@@ -60,7 +60,7 @@ assert_eq!(uri.user(), Some("+15551234567"));
 assert_eq!(uri.user_params(), &[("cpc".into(), Some("emergency".into()))]);
 assert_eq!(uri.password(), Some("secret"));
 assert_eq!(uri.port(), Some(5061));
-assert_eq!(uri.param("user"), Some(&Some("phone".into())));
+assert_eq!(uri.param("user"), Some(Some("phone")));
 assert_eq!(uri.header("Subject"), Some("test"));
 ```
 
@@ -125,7 +125,7 @@ use sip_uri::TelUri;
 let uri: TelUri = "tel:+15551234567;cpc=emergency;oli=0".parse().unwrap();
 assert_eq!(uri.number(), Some("+15551234567"));
 assert!(uri.is_global());
-assert_eq!(uri.param("cpc"), Some(&Some("emergency".into())));
+assert_eq!(uri.param("cpc"), Some(Some("emergency")));
 
 // Local numbers (no + prefix)
 let local: TelUri = "tel:911".parse().unwrap();

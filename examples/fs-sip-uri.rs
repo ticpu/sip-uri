@@ -178,11 +178,11 @@ fn uri_type(uri: &Uri) -> &'static str {
 
 /// A parameter present without a value yields an empty string; FreeSWITCH
 /// cannot distinguish that from an unset variable either way.
-fn param_value(found: Option<&Option<String>>) -> Option<String> {
+fn param_value(found: Option<Option<&str>>) -> Option<String> {
     found.map(|value| {
         value
-            .clone()
             .unwrap_or_default()
+            .to_string()
     })
 }
 
@@ -196,14 +196,7 @@ fn get(uri: &Uri, field: &str) -> Result<Option<String>, String> {
             }),
             "uparam" => Ok(uri
                 .as_sip()
-                .and_then(|u| {
-                    param_value(
-                        u.user_params()
-                            .iter()
-                            .find(|(n, _)| n.eq_ignore_ascii_case(name))
-                            .map(|(_, v)| v),
-                    )
-                })),
+                .and_then(|u| param_value(u.user_param(name)))),
             "header" => Ok(uri
                 .as_sip()
                 .and_then(|u| u.header(name))

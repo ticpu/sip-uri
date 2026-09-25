@@ -187,7 +187,7 @@ fn empty_param_segment() {
 #[test]
 fn param_extension_chars() {
     let (uri, w) = sip("sip:alice@example.com;maddr=a@b");
-    assert_eq!(uri.param("maddr"), Some(&Some("a@b".into())));
+    assert_eq!(uri.param("maddr"), Some(Some("a@b")));
     only(&w, Component::Param, WarningCode::InvalidChar);
 }
 
