@@ -3,11 +3,13 @@ use std::str::FromStr;
 
 use crate::error::ParseTelUriError;
 use crate::params;
+use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// tel: URI per RFC 3966.
 ///
 /// Represents a telephone number with optional parameters.
-/// Global numbers start with `+`, local numbers require a `phone-context` parameter.
+/// Global numbers start with `+`. A local number without the `phone-context`
+/// parameter RFC 3966 requires is accepted with a warning.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct TelUri {
@@ -84,6 +86,21 @@ impl FromStr for TelUri {
     type Err = ParseTelUriError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
+        Self::parse_with_warnings(input).map(|parsed| parsed.value)
+    }
+}
+
+impl TelUri {
+    /// Parse, reporting accepted grammar breaches beside the value.
+    ///
+    /// Accepts exactly what [`FromStr`] accepts.
+    pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseTelUriError> {
+        let mut warnings = Warnings::new(input);
+        let uri = Self::parse_into(input, &mut warnings)?;
+        Ok(warnings.finish(uri))
+    }
+
+    fn parse_into(input: &str, warnings: &mut Warnings) -> Result<Self, ParseTelUriError> {
         let err = |msg: &str| ParseTelUriError(msg.to_string());
 
         let rest = input
@@ -110,8 +127,15 @@ impl FromStr for TelUri {
             if let Some(hash_pos) = p.find('#') {
                 let frag = &p[hash_pos + 1..];
                 let frag = if frag.is_empty() {
+                    warnings.push(Component::Fragment, WarningCode::EmptyFragment, p, hash_pos);
                     None
                 } else {
+                    warnings.push(
+                        Component::Fragment,
+                        WarningCode::UnexpectedFragment,
+                        p,
+                        hash_pos,
+                    );
                     Some(frag.to_string())
                 };
                 (Some(&p[..hash_pos]), frag)
@@ -168,10 +192,20 @@ impl FromStr for TelUri {
         }
 
         let params = if let Some(p) = params_str {
-            params::parse_params(p).map_err(|e| err(&format!("param: {e}")))?
+            params::parse_params(p, &params::TEL_PARAMS, warnings)
+                .map_err(|e| err(&format!("param: {e}")))?
         } else {
             Vec::new()
         };
+
+        if number_bytes[0] != b'+' && params::find_param(&params, "phone-context").is_none() {
+            warnings.push(
+                Component::Number,
+                WarningCode::MissingPhoneContext,
+                number_str,
+                0,
+            );
+        }
 
         Ok(TelUri {
             number: number_str.to_string(),

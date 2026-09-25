@@ -49,6 +49,22 @@ pub(crate) fn is_paramchar(c: u8) -> bool {
     is_unreserved(c) || is_param_unreserved(c)
 }
 
+/// `paramchar` without the `@` and `,` extension: RFC 3261 §25 as written.
+pub(crate) fn is_param_strict(c: u8) -> bool {
+    is_paramchar(c) && !matches!(c, b'@' | b',')
+}
+
+/// RFC 3966: `pname = 1*( alphanum / "-" )`
+pub(crate) fn is_tel_pname_char(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'-'
+}
+
+/// RFC 3966: `paramchar = param-unreserved / unreserved / pct-encoded`, whose
+/// `param-unreserved` matches RFC 3261's without our extension.
+pub(crate) fn is_tel_paramchar(c: u8) -> bool {
+    is_param_strict(c)
+}
+
 /// Characters allowed unescaped in header names/values:
 /// unreserved + hnv-unreserved
 pub(crate) fn is_hnv_char(c: u8) -> bool {

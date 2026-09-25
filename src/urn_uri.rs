@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use crate::error::ParseUrnError;
 use crate::parse::{percent_decode, validate_pct_encoded};
+use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// URN (Uniform Resource Name) per RFC 8141.
 ///
@@ -159,6 +160,21 @@ impl FromStr for UrnUri {
     type Err = ParseUrnError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
+        Self::parse_with_warnings(input).map(|parsed| parsed.value)
+    }
+}
+
+impl UrnUri {
+    /// Parse, reporting accepted grammar breaches beside the value.
+    ///
+    /// Accepts exactly what [`FromStr`] accepts.
+    pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseUrnError> {
+        let mut warnings = Warnings::new(input);
+        let urn = Self::parse_into(input, &mut warnings)?;
+        Ok(warnings.finish(urn))
+    }
+
+    fn parse_into(input: &str, warnings: &mut Warnings) -> Result<Self, ParseUrnError> {
         let err = |msg: &str| ParseUrnError(msg.to_string());
 
         // Strip "urn:" scheme (case-insensitive)
@@ -181,12 +197,11 @@ impl FromStr for UrnUri {
 
         let after_nid = &rest[nid_end + 1..];
 
-        // Split off fragment (#) first -- '#' is not valid in NSS or rq-components
-        // delimiters, but IS valid inside r/q/f components. However, the outermost
-        // '#' starts the fragment.
-        let (before_fragment, f_component) = if let Some(hash) = after_nid.rfind('#') {
-            let frag = &after_nid[hash + 1..];
-            (&after_nid[..hash], Some(frag.to_string()))
+        // `#` appears in no component, so the first one starts the fragment.
+        let (before_fragment, f_component) = if let Some((before, frag)) = after_nid.split_once('#')
+        {
+            warnings.charset(Component::FComponent, frag, is_rqf_char);
+            (before, Some(frag.to_string()))
         } else {
             (after_nid, None)
         };
@@ -209,15 +224,31 @@ impl FromStr for UrnUri {
         } else {
             (None, None)
         };
+        for (component, value) in [
+            (Component::RComponent, r_component),
+            (Component::QComponent, q_component),
+        ] {
+            if let Some(value) = value {
+                if value.is_empty() {
+                    warnings.push(component, WarningCode::EmptyComponent, value, 0);
+                }
+                warnings.charset(component, value, is_rqf_char);
+            }
+        }
 
         Ok(UrnUri {
             nid: nid_str.to_ascii_lowercase(),
             nss,
-            r_component,
-            q_component,
+            r_component: r_component.map(str::to_string),
+            q_component: q_component.map(str::to_string),
             f_component,
         })
     }
+}
+
+/// RFC 8141: r-, q- and f-components are `*( pchar / "/" / "?" )`.
+fn is_rqf_char(b: u8) -> bool {
+    is_pchar(b) || matches!(b, b'/' | b'?')
 }
 
 /// Parse `?+r_component` and/or `?=q_component` from the rq portion.
@@ -226,30 +257,16 @@ impl FromStr for UrnUri {
 /// - `?+` introduces the r-component
 /// - `?=` introduces the q-component
 /// - r-component comes before q-component if both present
-fn parse_rq_components(s: &str) -> Result<(Option<String>, Option<String>), String> {
-    debug_assert!(s.starts_with('?'));
-
-    if s.len() < 2 {
-        return Err("unexpected '?' without '+' or '=' in URN".into());
-    }
-
-    match s.as_bytes()[1] {
-        b'+' => {
-            // r-component: extends to "?=" or end
-            let r_start = 2;
-            if let Some(qe) = s[r_start..].find("?=") {
-                let r = &s[r_start..r_start + qe];
-                let q = &s[r_start + qe + 2..];
-                Ok((Some(r.to_string()), Some(q.to_string())))
-            } else {
-                Ok((Some(s[r_start..].to_string()), None))
-            }
-        }
-        b'=' => {
-            // q-component only (no r-component)
-            Ok((None, Some(s[2..].to_string())))
-        }
-        _ => Err("'?' in URN not followed by '+' or '='".into()),
+fn parse_rq_components(s: &str) -> Result<(Option<&str>, Option<&str>), String> {
+    if let Some(r) = s.strip_prefix("?+") {
+        Ok(match r.split_once("?=") {
+            Some((r, q)) => (Some(r), Some(q)),
+            None => (Some(r), None),
+        })
+    } else if let Some(q) = s.strip_prefix("?=") {
+        Ok((None, Some(q)))
+    } else {
+        Err("'?' in URN not followed by '+' or '='".into())
     }
 }
 

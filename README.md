@@ -207,6 +207,23 @@ assert_eq!(uri.user(), Some(r#"%22foo%22"#));
 assert_eq!(decode_user("%2B15551234567").as_ref(), b"+15551234567");
 ```
 
+## Warnings
+
+Parsing is best-effort: input that breaks the grammar but still has one
+reading is accepted, and `parse_with_warnings` reports each breach as a typed
+`ParseWarning` (component, code, byte position, whether the value survived).
+`FromStr` accepts exactly the same input and drops the warnings. Warnings never
+quote the input, since a user part is a caller number.
+
+```rust
+use sip_uri::{Component, SipUri, WarningCode};
+
+let parsed = SipUri::parse_with_warnings("sip:+15551234567@example.com:+5060").unwrap();
+assert_eq!(parsed.value.port(), Some(5060));
+assert_eq!(parsed.warnings[0].component, Component::Port);
+assert_eq!(parsed.warnings[0].code, WarningCode::SignedPort);
+```
+
 ## Design
 
 - **Zero dependencies** -- not even `percent-encoding`. The subset needed is

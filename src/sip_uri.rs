@@ -5,6 +5,7 @@ use crate::error::ParseSipUriError;
 use crate::host::Host;
 use crate::params;
 use crate::parse;
+use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 type Params = Vec<(String, Option<String>)>;
 type Headers = Vec<(String, String)>;
@@ -220,6 +221,29 @@ impl FromStr for SipUri {
     type Err = ParseSipUriError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
+        Self::parse_with_warnings(input).map(|parsed| parsed.value)
+    }
+}
+
+impl SipUri {
+    /// Parse, reporting accepted grammar breaches beside the value.
+    ///
+    /// Accepts exactly what [`FromStr`] accepts.
+    ///
+    /// ```
+    /// use sip_uri::{SipUri, WarningCode};
+    ///
+    /// let parsed = SipUri::parse_with_warnings("sip:host:+5060").unwrap();
+    /// assert_eq!(parsed.value.port(), Some(5060));
+    /// assert_eq!(parsed.warnings[0].code, WarningCode::SignedPort);
+    /// ```
+    pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseSipUriError> {
+        let mut warnings = Warnings::new(input);
+        let uri = Self::parse_into(input, &mut warnings)?;
+        Ok(warnings.finish(uri))
+    }
+
+    fn parse_into(input: &str, warnings: &mut Warnings) -> Result<Self, ParseSipUriError> {
         let err = |msg: &str| ParseSipUriError(msg.to_string());
 
         // 1. Scheme detection
@@ -237,21 +261,16 @@ impl FromStr for SipUri {
 
         let rest = &input[colon_pos + 1..];
 
-        // 2. Split userinfo from hostport+params+headers
-        // SIP user-part allows ;/?/ unescaped, so we use the sofia-sip approach:
-        // find @ by scanning past those chars
         let (userinfo, hostport_rest) = split_userinfo_host(rest)?;
 
-        // 3. Parse userinfo if present
         let (user, user_params, password) = if let Some(uinfo) = userinfo {
-            parse_userinfo(uinfo)?
+            parse_userinfo(uinfo, warnings)?
         } else {
             (None, Vec::new(), None)
         };
 
-        // 4. Parse host, port, params, headers, fragment from the rest
         let (host, port, uri_params, headers, fragment) =
-            parse_hostport_params_headers(hostport_rest)?;
+            parse_hostport_params_headers(hostport_rest, warnings)?;
 
         Ok(SipUri {
             scheme,
@@ -293,77 +312,97 @@ fn split_userinfo_host(s: &str) -> Result<(Option<&str>, &str), ParseSipUriError
 /// Parse the userinfo portion into (user, user_params, password).
 ///
 /// Userinfo structure: `user [*(";" user-param)] [":" password]`
-fn parse_userinfo(s: &str) -> UserinfoResult {
+fn parse_userinfo(s: &str, warnings: &mut Warnings) -> UserinfoResult {
     let err = |msg: &str| ParseSipUriError(msg.to_string());
 
     // `:` is not user-unreserved, so the first one starts the password.
     let (user_and_params, password) = if let Some(colon_pos) = s.find(':') {
         let pwd = &s[colon_pos + 1..];
+        warnings.charset(Component::Password, pwd, parse::is_password_char);
         (&s[..colon_pos], Some(parse::canonize_password(pwd)))
     } else {
         (s, None)
     };
 
-    // Split user from user-params on first `;`
-    // In the userinfo, `;` separates user-params (used for tel: style params
-    // like cpc=emergency). The user part itself is before the first `;`.
-    if let Some(semi_pos) = user_and_params.find(';') {
-        let user_part = &user_and_params[..semi_pos];
-        let params_str = &user_and_params[semi_pos + 1..];
+    let (user_part, params_str) = match user_and_params.split_once(';') {
+        Some((user, params)) => (user, Some(params)),
+        None => (user_and_params, None),
+    };
 
-        if user_part.is_empty() {
+    if user_part.is_empty() {
+        if params_str.is_some() {
             return Err(err("empty user before ';'"));
         }
-
-        let user = parse::canonize_user(user_part);
-        let user_params =
-            params::parse_user_params(params_str).map_err(|e| err(&format!("user param: {e}")))?;
-
-        Ok((Some(user), user_params, password))
-    } else if user_and_params.is_empty() {
-        Ok((None, Vec::new(), password))
-    } else {
-        let user = parse::canonize_user(user_and_params);
-        Ok((Some(user), Vec::new(), password))
+        warnings.push(Component::User, WarningCode::PasswordWithoutUser, s, 0);
+        return Ok((None, Vec::new(), password));
     }
+
+    warnings.charset(Component::User, user_part, parse::is_user_char);
+    if let Some(q) = user_and_params.find('?') {
+        warnings.push(
+            Component::User,
+            WarningCode::HeaderShapedUser,
+            user_and_params,
+            q,
+        );
+    }
+
+    let user_params = match params_str {
+        Some(p) => params::parse_params(p, &params::USER_PARAMS, warnings)
+            .map_err(|e| err(&format!("user param: {e}")))?,
+        None => Vec::new(),
+    };
+
+    Ok((Some(parse::canonize_user(user_part)), user_params, password))
 }
 
 /// Parse host, optional port, URI params, and headers from the portion after `@` (or after scheme: if no userinfo).
-fn parse_hostport_params_headers(s: &str) -> HostportResult {
+fn parse_hostport_params_headers(s: &str, warnings: &mut Warnings) -> HostportResult {
     let err = |msg: &str| ParseSipUriError(msg.to_string());
 
-    // Parse host
-    let (host, consumed) = Host::parse_from_uri(s).map_err(|e| err(&e))?;
+    let (host, consumed) = Host::parse_from_uri(s, warnings).map_err(|e| err(&e))?;
 
     let rest = &s[consumed..];
 
-    // Parse optional port
-    let (port, rest) = if let Some(rest) = rest.strip_prefix(':') {
-        // Port: digits until `;`, `?`, `#`, `>`, or end
-        let end = rest
+    let (port, rest) = if let Some(after) = rest.strip_prefix(':') {
+        let end = after
             .find([';', '?', '#', '>'])
-            .unwrap_or(rest.len());
-        let port_str = &rest[..end];
+            .unwrap_or(after.len());
+        let port_str = &after[..end];
 
         if port_str.is_empty() {
-            // Empty port is valid per sofia-sip (e.g., "sip:host:")
-            (None, &rest[end..])
+            warnings.push(Component::Port, WarningCode::EmptyPort, rest, 0);
+            (None, &after[end..])
         } else {
+            if port_str.starts_with('+') {
+                warnings.push(Component::Port, WarningCode::SignedPort, port_str, 0);
+            }
             let port: u16 = port_str
                 .parse()
                 .map_err(|_| err("port is not a number in 0-65535"))?;
-            (Some(port), &rest[end..])
+            (Some(port), &after[end..])
         }
     } else {
         (None, rest)
     };
 
-    // Strip fragment (#...) from the end before parsing params/headers
     let (rest, fragment) = if let Some(hash_pos) = rest.find('#') {
         let frag = &rest[hash_pos + 1..];
         let frag = if frag.is_empty() {
+            warnings.push(
+                Component::Fragment,
+                WarningCode::EmptyFragment,
+                rest,
+                hash_pos,
+            );
             None
         } else {
+            warnings.push(
+                Component::Fragment,
+                WarningCode::UnexpectedFragment,
+                rest,
+                hash_pos,
+            );
             Some(frag.to_string())
         };
         (&rest[..hash_pos], frag)
@@ -371,29 +410,28 @@ fn parse_hostport_params_headers(s: &str) -> HostportResult {
         (rest, None)
     };
 
-    // Parse URI params (after `;`) and headers (after `?`)
     let (params_str, headers_str) = if let Some(rest) = rest.strip_prefix(';') {
-        // Split params from headers on `?`
-        if let Some(q_pos) = rest.find('?') {
-            (&rest[..q_pos], Some(&rest[q_pos + 1..]))
-        } else {
-            (rest, None)
+        match rest.split_once('?') {
+            Some((params, headers)) => (Some(params), Some(headers)),
+            None => (Some(rest), None),
         }
     } else if let Some(rest) = rest.strip_prefix('?') {
-        ("", Some(rest))
+        (None, Some(rest))
     } else if rest.is_empty() {
-        ("", None)
+        (None, None)
     } else {
         return Err(err("unexpected character after host/port"));
     };
 
-    let uri_params =
-        params::parse_params(params_str).map_err(|e| err(&format!("URI param: {e}")))?;
+    let uri_params = match params_str {
+        Some(p) => params::parse_params(p, &params::SIP_PARAMS, warnings)
+            .map_err(|e| err(&format!("URI param: {e}")))?,
+        None => Vec::new(),
+    };
 
-    let headers = if let Some(h) = headers_str {
-        params::parse_headers(h).map_err(|e| err(&format!("header: {e}")))?
-    } else {
-        Vec::new()
+    let headers = match headers_str {
+        Some(h) => params::parse_headers(h, warnings).map_err(|e| err(&format!("header: {e}")))?,
+        None => Vec::new(),
     };
 
     Ok((host, port, uri_params, headers, fragment))

@@ -44,6 +44,7 @@ mod sip_uri;
 mod tel_uri;
 mod uri;
 mod urn_uri;
+mod warning;
 
 pub use error::{
     ParseHostError, ParseNameAddrError, ParseSipUriError, ParseTelUriError, ParseUriError,
@@ -57,3 +58,4 @@ pub use sip_uri::{Scheme, SipUri};
 pub use tel_uri::TelUri;
 pub use uri::Uri;
 pub use urn_uri::UrnUri;
+pub use warning::{Component, ParseWarning, Parsed, WarningCode, WarningKind};

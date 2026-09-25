@@ -5,6 +5,7 @@ use crate::error::ParseUriError;
 use crate::sip_uri::SipUri;
 use crate::tel_uri::TelUri;
 use crate::urn_uri::UrnUri;
+use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// A parsed URI: SIP/SIPS, tel, URN, or an opaque URI with an unrecognized scheme.
 ///
@@ -142,6 +143,17 @@ impl FromStr for Uri {
     type Err = ParseUriError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse_with_warnings(s).map(|parsed| parsed.value)
+    }
+}
+
+impl Uri {
+    /// Parse, reporting accepted grammar breaches beside the value.
+    ///
+    /// Accepts exactly what [`FromStr`] accepts. An unrecognized scheme
+    /// outside the RFC 3986 grammar, such as a URI still wrapped in `<>`,
+    /// is kept as [`Uri::Other`] with a warning.
+    pub fn parse_with_warnings(s: &str) -> Result<Parsed<Self>, ParseUriError> {
         if s == "*" {
             return Err(ParseUriError(
                 "wildcard '*' is not a URI; handle it at the protocol layer (Contact: * or OPTIONS * SIP/2.0)".into(),
@@ -154,16 +166,36 @@ impl FromStr for Uri {
             .ok_or_else(|| ParseUriError("missing scheme".into()))?;
         let scheme = &s[..colon];
 
+        fn wrap<T>(parsed: Parsed<T>, variant: fn(T) -> Uri) -> Parsed<Uri> {
+            Parsed {
+                value: variant(parsed.value),
+                warnings: parsed.warnings,
+            }
+        }
+
         if scheme.eq_ignore_ascii_case("tel") {
-            Ok(Uri::Tel(s.parse::<TelUri>()?))
+            Ok(wrap(TelUri::parse_with_warnings(s)?, Uri::Tel))
         } else if scheme.eq_ignore_ascii_case("sip") || scheme.eq_ignore_ascii_case("sips") {
-            Ok(Uri::Sip(s.parse::<SipUri>()?))
+            Ok(wrap(SipUri::parse_with_warnings(s)?, Uri::Sip))
         } else if scheme.eq_ignore_ascii_case("urn") {
-            Ok(Uri::Urn(s.parse::<UrnUri>()?))
+            Ok(wrap(UrnUri::parse_with_warnings(s)?, Uri::Urn))
         } else {
-            Ok(Uri::Other(s.to_string()))
+            let mut warnings = Warnings::new(s);
+            if !is_rfc3986_scheme(scheme) {
+                warnings.push(Component::Scheme, WarningCode::InvalidScheme, scheme, 0);
+            }
+            Ok(warnings.finish(Uri::Other(s.to_string())))
         }
     }
+}
+
+/// RFC 3986 §3.1: `scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`
+fn is_rfc3986_scheme(s: &str) -> bool {
+    let mut bytes = s.bytes();
+    bytes
+        .next()
+        .is_some_and(|b| b.is_ascii_alphabetic())
+        && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'))
 }
 
 impl fmt::Display for Uri {

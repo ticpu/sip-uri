@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use crate::error::ParseHostError;
 use crate::parse;
+use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// Host component of a SIP URI.
 ///
@@ -25,7 +26,10 @@ impl Host {
     ///
     /// Handles `[IPv6]`, dotted-decimal IPv4, and DNS hostnames.
     /// Returns the parsed host and the number of bytes consumed.
-    pub(crate) fn parse_from_uri(s: &str) -> Result<(Self, usize), String> {
+    pub(crate) fn parse_from_uri(
+        s: &str,
+        warnings: &mut Warnings,
+    ) -> Result<(Self, usize), String> {
         if s.is_empty() {
             return Err("empty host".into());
         }
@@ -50,8 +54,8 @@ impl Host {
                 return Err("empty host".into());
             }
 
-            // Percent-decode the host for parsing (unreserved chars decoded)
             let decoded = if host_str.contains('%') {
+                warnings.push(Component::Host, WarningCode::EscapedHost, host_str, 0);
                 parse::percent_decode(host_str, parse::is_unreserved)
             } else {
                 host_str.to_string()
@@ -74,8 +78,50 @@ impl Host {
             {
                 return Err("invalid hostname character".into());
             }
+            warn_hostname_labels(&decoded, host_str, warnings);
 
             Ok((Host::Hostname(decoded.to_ascii_lowercase()), end))
+        }
+    }
+}
+
+/// RFC 3261 §25: `hostname = *( domainlabel "." ) toplabel [ "." ]`, a label
+/// neither empty nor hyphen-bounded, the toplabel starting with ALPHA.
+///
+/// `raw` is the host as written; positions point at its start when it was
+/// escaped, since `name` offsets then no longer map onto the input.
+fn warn_hostname_labels(name: &str, raw: &str, warnings: &mut Warnings) {
+    let labels = name
+        .strip_suffix('.')
+        .unwrap_or(name);
+    let offset = |label: &str| {
+        if name.len() == raw.len() {
+            label.as_ptr() as usize - name.as_ptr() as usize
+        } else {
+            0
+        }
+    };
+    let mut last = None;
+    for label in labels.split('.') {
+        if label.is_empty() || label.starts_with('-') || label.ends_with('-') {
+            warnings.push(
+                Component::Host,
+                WarningCode::InvalidHostLabel,
+                raw,
+                offset(label),
+            );
+            return;
+        }
+        last = Some(label);
+    }
+    if let Some(top) = last {
+        if !top.as_bytes()[0].is_ascii_alphabetic() {
+            warnings.push(
+                Component::Host,
+                WarningCode::NumericToplabel,
+                raw,
+                offset(top),
+            );
         }
     }
 }
@@ -161,21 +207,30 @@ impl FromStr for Host {
     type Err = ParseHostError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse_with_warnings(s).map(|parsed| parsed.value)
+    }
+}
+
+impl Host {
+    /// Parse a complete host as [`FromStr`] does, reporting accepted grammar
+    /// breaches beside the value.
+    pub fn parse_with_warnings(s: &str) -> Result<Parsed<Self>, ParseHostError> {
+        let mut warnings = Warnings::new(s);
         // A bare IPv6 has to be recognized up front: the URI parser stops the
         // host at the first `:`, which is inside the address here.
         if !s.starts_with('[') {
             if let Ok(addr) = s.parse::<Ipv6Addr>() {
-                return Ok(Host::IPv6(addr));
+                return Ok(warnings.finish(Host::IPv6(addr)));
             }
         }
 
-        let (host, consumed) = Host::parse_from_uri(s).map_err(ParseHostError)?;
+        let (host, consumed) = Host::parse_from_uri(s, &mut warnings).map_err(ParseHostError)?;
         if consumed != s.len() {
             return Err(ParseHostError(format!(
                 "trailing content after host at position {consumed}"
             )));
         }
-        Ok(host)
+        Ok(warnings.finish(host))
     }
 }
 
@@ -189,23 +244,27 @@ impl fmt::Display for Host {
 mod tests {
     use super::*;
 
+    fn from_uri(s: &str) -> Result<(Host, usize), String> {
+        Host::parse_from_uri(s, &mut Warnings::new(s))
+    }
+
     #[test]
     fn parse_ipv4() {
-        let (host, consumed) = Host::parse_from_uri("198.51.100.55:5060").unwrap();
+        let (host, consumed) = from_uri("198.51.100.55:5060").unwrap();
         assert_eq!(host, Host::IPv4(Ipv4Addr::new(198, 51, 100, 55)));
         assert_eq!(consumed, 13);
     }
 
     #[test]
     fn parse_ipv6() {
-        let (host, consumed) = Host::parse_from_uri("[::1]:56001").unwrap();
+        let (host, consumed) = from_uri("[::1]:56001").unwrap();
         assert_eq!(host, Host::IPv6(Ipv6Addr::LOCALHOST));
         assert_eq!(consumed, 5);
     }
 
     #[test]
     fn parse_ipv6_full() {
-        let (host, consumed) = Host::parse_from_uri("[2001:db8::1]:5061").unwrap();
+        let (host, consumed) = from_uri("[2001:db8::1]:5061").unwrap();
         assert_eq!(
             host,
             Host::IPv6(
@@ -219,14 +278,14 @@ mod tests {
 
     #[test]
     fn parse_hostname() {
-        let (host, consumed) = Host::parse_from_uri("example.com;transport=tcp").unwrap();
+        let (host, consumed) = from_uri("example.com;transport=tcp").unwrap();
         assert_eq!(host, Host::Hostname("example.com".into()));
         assert_eq!(consumed, 11);
     }
 
     #[test]
     fn hostname_lowercased() {
-        let (host, _) = Host::parse_from_uri("MY.DOMAIN").unwrap();
+        let (host, _) = from_uri("MY.DOMAIN").unwrap();
         assert_eq!(host, Host::Hostname("my.domain".into()));
     }
 
@@ -321,7 +380,7 @@ mod tests {
 
     #[test]
     fn empty_host_fails() {
-        assert!(Host::parse_from_uri("").is_err());
-        assert!(Host::parse_from_uri(":5060").is_err());
+        assert!(from_uri("").is_err());
+        assert!(from_uri(":5060").is_err());
     }
 }
