@@ -97,6 +97,7 @@ the error contract below for telling them apart.
 | `param.<name>` | URI parameter, after the host |
 | `uparam.<name>` | user parameter, inside the userinfo before `@` |
 | `header.<name>` | URI header, after `?` |
+| `warnings` | grammar breaches the parser accepted, `component:code` space-separated |
 
 Parameter lookups are case-insensitive. A parameter present without a value
 prints empty — FreeSWITCH cannot distinguish that from unset either way.
@@ -115,7 +116,19 @@ Where the parse should be recorded rather than just tested — so that `info`,
 `sip:+15551234567;cpc=emergency@198.51.100.1;user=phone` then sets
 `uri_type`, `uri_scheme`, `uri_user`, `uri_host`, `uri_uparam_cpc`,
 `uri_param_user` and `uri_keys`. Absent components are not emitted, so they
-stay unset.
+stay unset. A repeated parameter keeps its first value, as `get` does. The
+password is never emitted, since channel variables reach `uuid_dump` and the
+CDR; `get password` still reads it.
+
+`<prefix>warnings` is emitted only when the parser accepted something
+non-conformant, for example `port:signed-port` for `sip:host:+5060`. It is the
+material for a discrepancy report upstream, and a dialplan can branch on it:
+
+```xml
+<condition field="${uri_warnings}" expression="^$" break="never">
+    <anti-action application="log" data="WARNING non-conformant URI: ${uri_warnings}"/>
+</condition>
+```
 
 The `^^|` prefix tells `multiset` to split the payload on `|` instead of a
 space. That delimiter cannot be assumed safe: the parser decodes `%3B` and
@@ -157,8 +170,9 @@ with each other; this flat namespace is the only shared thing here.
 ## Angle brackets
 
 A bare `<sip:...>` wrapper is stripped. A display name or trailing header
-parameters are header grammar rather than URI grammar and are rejected — split
-the name-addr before calling this.
+parameters are header grammar rather than URI grammar: the text then parses as
+`type` `other` with the warning `scheme:invalid-scheme`, so split the name-addr
+before calling this.
 
 ## Error contract
 
@@ -169,7 +183,7 @@ both naming the full command:
 
 ```
 [WARNING] switch_core.c:3481 STDERR of cmd (…/fs-sip-uri get user garbage-not-a-uri):
-          fs-sip-uri: cannot parse "garbage-not-a-uri": invalid URI: missing scheme
+          fs-sip-uri: cannot parse URI: invalid URI: missing scheme
 [WARNING] switch_core.c:3494 Exit status (256): …/fs-sip-uri get user garbage-not-a-uri
 ```
 

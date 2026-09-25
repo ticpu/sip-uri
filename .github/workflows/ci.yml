@@ -76,3 +76,4 @@ jobs:
         file "$bin" | grep -q static
         "$bin" --version
         test "$("$bin" get param.participantid 'sip:sip.example.com;participantid=2')" = 2
+        test "$("$bin" get warnings 'sip:sip.example.com:+5060')" = port:signed-port

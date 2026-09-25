@@ -143,8 +143,8 @@ check 'garbage-not-a-uri' uri_type=_undef_ uri_host=_undef_ inline_user=_undef_
 # A raw delimiter in a component aborts the payload rather than corrupting it.
 check 'sip:a|b@host.example.com' uri_type=_undef_ inline_user='a|b'
 
-# The first parse sets user, password, port and a param the second URI lacks;
-# multiunset must leave none of them readable.
+# The first parse sets user, port and a param the second URI lacks; multiunset
+# must leave none of them readable, and no parse sets a password.
 echo "== reparse clears the previous parse"
 EXTEN=reparse
 check 'sip:second.example.com;participantid=2' \

@@ -16,7 +16,7 @@
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use sip_uri::{SipUri, Uri};
+use sip_uri::{ParseWarning, SipUri, Uri};
 
 /// Separator for the `vars` payload, matching the `^^|` prefix the dialplan
 /// hands to `multiset`. Any component containing it aborts the whole payload:
@@ -54,7 +54,7 @@ struct Cli {
 enum Cmd {
     /// Print one field, or nothing when the URI has no such component.
     Get {
-        /// scheme, type, uri, user, password, host, port, nid, nss,
+        /// scheme, type, uri, user, password, host, port, nid, nss, warnings,
         /// param.<name>, uparam.<name>, header.<name>
         field: String,
         #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
@@ -78,15 +78,20 @@ fn main() -> ExitCode {
     let joined = raw.join(" ");
     let text = strip_angle_brackets(joined.trim());
 
-    let uri: Uri = match text.parse() {
-        Ok(u) => u,
+    let (uri, warnings) = match Uri::parse_with_warnings(text) {
+        Ok(parsed) => (parsed.value, warning_list(&parsed.warnings)),
         Err(e) => {
-            eprintln!("fs-sip-uri: cannot parse {text:?}: {e}");
+            eprintln!("fs-sip-uri: cannot parse URI: {e}");
             return ExitCode::FAILURE;
         }
     };
 
     match &cli.cmd {
+        Cmd::Get { field, .. } if field == "warnings" => {
+            if !warnings.is_empty() {
+                println!("{warnings}");
+            }
+        }
         Cmd::Get { field, .. } => match get(&uri, field) {
             Ok(Some(value)) => println!("{value}"),
             Ok(None) => {}
@@ -97,6 +102,9 @@ fn main() -> ExitCode {
         },
         Cmd::Vars { prefix, .. } => {
             let mut pairs = vars(&uri);
+            if !warnings.is_empty() {
+                pairs.push(("warnings".into(), warnings));
+            }
             if let Some((name, _)) = pairs
                 .iter()
                 .find(|(n, v)| n.contains(DELIM) || v.contains(DELIM))
@@ -134,12 +142,29 @@ fn main() -> ExitCode {
 }
 
 /// Accept the `<sip:...>` wrapper a name-addr puts around the URI. A display
-/// name or trailing header params are header grammar, not URI grammar, and are
-/// left to fail in the parser.
+/// name or trailing header params are header grammar, not URI grammar: the
+/// text then parses as an unrecognized scheme warning `scheme:invalid-scheme`.
 fn strip_angle_brackets(s: &str) -> &str {
     s.strip_prefix('<')
         .and_then(|inner| inner.strip_suffix('>'))
         .unwrap_or(s)
+}
+
+/// `component:code` per warning, space-separated like `keys`.
+fn warning_list(warnings: &[ParseWarning]) -> String {
+    warnings
+        .iter()
+        .map(|w| {
+            format!(
+                "{}:{}",
+                w.component
+                    .as_str(),
+                w.code
+                    .as_str()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn uri_type(uri: &Uri) -> &'static str {
@@ -227,9 +252,18 @@ fn get(uri: &Uri, field: &str) -> Result<Option<String>, String> {
     })
 }
 
+/// The password is left out: channel variables reach `uuid_dump` and the CDR.
+/// A repeated name keeps its first value, as `get` does.
 fn vars(uri: &Uri) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
-    let mut push = |name: String, value: String| out.push((name, value));
+    let mut push = |name: String, value: String| {
+        if !out
+            .iter()
+            .any(|(n, _)| *n == name)
+        {
+            out.push((name, value));
+        }
+    };
 
     push("type".into(), uri_type(uri).into());
     push(
@@ -250,9 +284,6 @@ fn vars(uri: &Uri) -> Vec<(String, String)> {
             );
             if let Some(port) = u.port() {
                 push("port".into(), port.to_string());
-            }
-            if let Some(password) = u.password() {
-                push("password".into(), password.into());
             }
             for (name, value) in u.user_params() {
                 push(
