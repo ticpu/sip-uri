@@ -16,6 +16,17 @@ fn default_masks_whole_userinfo() {
 }
 
 #[test]
+fn user_mask_reads_back() {
+    assert_eq!(Redaction::default().user_mask(), UserMask::Full);
+    assert_eq!(
+        Redaction::default()
+            .user(UserMask::KeepLast(4))
+            .user_mask(),
+        UserMask::KeepLast(4)
+    );
+}
+
+#[test]
 fn default_leaves_uri_without_userinfo_unchanged() {
     let uri = sip("sip:example.com;transport=tcp");
     assert_eq!(

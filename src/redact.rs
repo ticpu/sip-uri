@@ -50,6 +50,11 @@ impl<'a> Redaction<'a> {
         self
     }
 
+    /// How the user part or tel: number is rendered.
+    pub fn user_mask(&self) -> UserMask {
+        self.user
+    }
+
     /// Leave URI headers out of the rendering.
     pub fn drop_headers(mut self) -> Self {
         self.drop_headers = true;
