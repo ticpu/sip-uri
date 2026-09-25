@@ -144,12 +144,6 @@ fn find_host_end(s: &str) -> usize {
 }
 
 impl Host {
-    /// Format the host for use inside a URI (brackets around IPv6).
-    #[deprecated(since = "0.2.9", note = "use the Display impl, which renders the same")]
-    pub fn fmt_uri(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, f)
-    }
-
     /// Render without IPv6 brackets, for contexts that supply their own or take
     /// no brackets at all (SDP connection lines, URI parameter values, log text).
     ///
