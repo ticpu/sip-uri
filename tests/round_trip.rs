@@ -1,5 +1,4 @@
-#![allow(deprecated)]
-use sip_uri::{Host, NameAddr, Scheme, SipUri, TelUri, Uri, UrnUri};
+use sip_uri::{Host, Scheme, SipUri, TelUri, Uri, UrnUri};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 // ========================================================================
@@ -247,14 +246,9 @@ fn sofia_tel_with_params() {
 // ========================================================================
 
 #[test]
-fn ng911_full_name_addr() {
-    let na: NameAddr =
-        r#""EXAMPLE CO" <sip:+15551234567;cpc=emergency;oli=0@198.51.100.1;user=phone>"#
-            .parse()
-            .unwrap();
-    assert_eq!(na.display_name(), Some("EXAMPLE CO"));
-    let sip = na
-        .sip_uri()
+fn ng911_user_params_ipv4_user_phone() {
+    let sip: SipUri = "sip:+15551234567;cpc=emergency;oli=0@198.51.100.1;user=phone"
+        .parse()
         .unwrap();
     assert_eq!(sip.user(), Some("+15551234567"));
     assert_eq!(
@@ -334,13 +328,9 @@ fn ng911_participantid_host_reused_as_user() {
 }
 
 #[test]
-fn ng911_angle_brackets_user_phone() {
-    let na: NameAddr = "<sip:1305@pbx.example.com;user=phone>"
+fn ng911_user_phone() {
+    let sip: SipUri = "sip:1305@pbx.example.com;user=phone"
         .parse()
-        .unwrap();
-    assert_eq!(na.display_name(), None);
-    let sip = na
-        .sip_uri()
         .unwrap();
     assert_eq!(sip.user(), Some("1305"));
     assert_eq!(sip.param("user"), Some(&Some("phone".into())));
@@ -402,23 +392,17 @@ fn ng911_bare_number_at_host() {
 
 #[test]
 fn ng911_session_id() {
-    let na: NameAddr = "<sip:session-id@focus.example.com>"
+    let sip: SipUri = "sip:session-id@focus.example.com"
         .parse()
-        .unwrap();
-    let sip = na
-        .sip_uri()
         .unwrap();
     assert_eq!(sip.user(), Some("session-id"));
     assert_eq!(sip.host(), &Host::Hostname("focus.example.com".into()));
 }
 
 #[test]
-fn ng911_ipv6_in_angle_brackets() {
-    let na: NameAddr = "<sip:+15551234567@[2001:db8::8];user=phone>"
+fn ng911_ipv6_without_port() {
+    let sip: SipUri = "sip:+15551234567@[2001:db8::8];user=phone"
         .parse()
-        .unwrap();
-    let sip = na
-        .sip_uri()
         .unwrap();
     assert_eq!(sip.user(), Some("+15551234567"));
     assert_eq!(
@@ -433,11 +417,8 @@ fn ng911_ipv6_in_angle_brackets() {
 
 #[test]
 fn ng911_tel_with_cpc_emergency() {
-    let na: NameAddr = "<tel:+15551234567;cpc=emergency>"
+    let tel: TelUri = "tel:+15551234567;cpc=emergency"
         .parse()
-        .unwrap();
-    let tel = na
-        .tel_uri()
         .unwrap();
     assert_eq!(tel.number(), "+15551234567");
     assert_eq!(tel.param("cpc"), Some(&Some("emergency".into())));
@@ -445,11 +426,8 @@ fn ng911_tel_with_cpc_emergency() {
 
 #[test]
 fn ng911_tel_param_without_value() {
-    let na: NameAddr = "<tel:+15551234567;cpc=emergency;oli>"
+    let tel: TelUri = "tel:+15551234567;cpc=emergency;oli"
         .parse()
-        .unwrap();
-    let tel = na
-        .tel_uri()
         .unwrap();
     assert_eq!(tel.param("cpc"), Some(&Some("emergency".into())));
     assert_eq!(tel.param("oli"), Some(&None));
@@ -501,17 +479,6 @@ fn roundtrip_uri(input: &str) {
     );
 }
 
-fn roundtrip_nameaddr(input: &str) {
-    let na1: NameAddr = input
-        .parse()
-        .unwrap();
-    let displayed = na1.to_string();
-    let na2: NameAddr = displayed
-        .parse()
-        .unwrap();
-    assert_eq!(na1, na2, "roundtrip failed for '{input}' -> '{displayed}'");
-}
-
 #[test]
 fn roundtrip_sip_basic() {
     roundtrip_sip("sip:joe@example.com");
@@ -553,18 +520,8 @@ fn roundtrip_uri_tel() {
 }
 
 #[test]
-fn roundtrip_nameaddr_quoted() {
-    roundtrip_nameaddr(r#""EXAMPLE CO" <sip:+15551234567@198.51.100.1;user=phone>"#);
-}
-
-#[test]
-fn roundtrip_nameaddr_no_name() {
-    roundtrip_nameaddr("<sip:alice@example.com>");
-}
-
-#[test]
-fn roundtrip_nameaddr_tel() {
-    roundtrip_nameaddr("<tel:+15551234567;cpc=emergency>");
+fn roundtrip_uri_tel_params() {
+    roundtrip_uri("tel:+15551234567;cpc=emergency");
 }
 
 // ========================================================================
@@ -689,76 +646,17 @@ fn ng911_user_param_cpc() {
 }
 
 #[test]
-fn ng911_nameaddr_with_display_name() {
-    let na: NameAddr = r#""EXAMPLE CO" <sip:+15551234567@pbx.example.com;user=phone>"#
+fn ng911_tel_without_plus() {
+    let tel: TelUri = "tel:15551234567"
         .parse()
-        .unwrap();
-    assert_eq!(na.display_name(), Some("EXAMPLE CO"));
-    let sip = na
-        .sip_uri()
-        .unwrap();
-    assert_eq!(sip.user(), Some("+15551234567"));
-    assert_eq!(sip.host(), &Host::Hostname("pbx.example.com".into()));
-}
-
-#[test]
-fn ng911_nameaddr_empty_display_name() {
-    let na: NameAddr = r#""" <sip:+15551234567@pbx.example.com;user=phone>"#
-        .parse()
-        .unwrap();
-    // Empty quoted display name is normalized to None
-    assert_eq!(na.display_name(), None);
-}
-
-#[test]
-fn ng911_nameaddr_angle_brackets() {
-    let na: NameAddr = "<sip:+15551234567@pbx.example.com;user=phone>"
-        .parse()
-        .unwrap();
-    assert_eq!(na.display_name(), None);
-}
-
-#[test]
-fn ng911_nameaddr_bare_sip() {
-    let na: NameAddr = "sip:+15551234567@pbx.example.com;user=phone"
-        .parse()
-        .unwrap();
-    assert_eq!(na.display_name(), None);
-    let sip = na
-        .sip_uri()
-        .unwrap();
-    assert_eq!(sip.user(), Some("+15551234567"));
-}
-
-#[test]
-fn ng911_nameaddr_tel_with_plus() {
-    let na: NameAddr = "tel:+15551234567"
-        .parse()
-        .unwrap();
-    assert_eq!(na.display_name(), None);
-    assert!(na
-        .tel_uri()
-        .is_some());
-}
-
-#[test]
-fn ng911_nameaddr_tel_without_plus() {
-    let na: NameAddr = "tel:15551234567"
-        .parse()
-        .unwrap();
-    let tel = na
-        .tel_uri()
         .unwrap();
     assert_eq!(tel.number(), "15551234567");
 }
 
 #[test]
-fn ng911_nameaddr_tel_with_params() {
-    let na: NameAddr = "tel:+15559871234;cpc=emergency"
+fn ng911_tel_with_params() {
+    let tel: TelUri = "tel:+15559871234;cpc=emergency"
         .parse()
-        .unwrap();
-    let tel = na
-        .tel_uri()
         .unwrap();
     assert_eq!(tel.number(), "+15559871234");
     assert_eq!(tel.param("cpc"), Some(&Some("emergency".into())));
@@ -970,15 +868,6 @@ fn builder_tel_uri() {
     assert_eq!(uri.to_string(), "tel:+15551234567;cpc=emergency;oli=0");
 }
 
-#[test]
-fn builder_name_addr() {
-    let sip: SipUri = "sip:alice@example.com"
-        .parse()
-        .unwrap();
-    let na = NameAddr::new(Uri::Sip(sip)).with_display_name("Alice Smith");
-    assert_eq!(na.to_string(), r#""Alice Smith" <sip:alice@example.com>"#);
-}
-
 // ========================================================================
 // Edge cases
 // ========================================================================
@@ -1044,36 +933,6 @@ fn uri_dispatch_preserves_type() {
 }
 
 #[test]
-fn nameaddr_bare_sip_uri() {
-    let na: NameAddr = "sip:alice@example.com"
-        .parse()
-        .unwrap();
-    assert_eq!(na.display_name(), None);
-    assert!(na
-        .sip_uri()
-        .is_some());
-}
-
-#[test]
-fn nameaddr_bare_uri_normalizes_to_angle_brackets() {
-    // Bare URIs are normalized to angle-bracket form on display.
-    // parse(display(parse(x))) == parse(x) holds, but display(parse(x)) != x.
-    let na: NameAddr = "sip:alice@example.com"
-        .parse()
-        .unwrap();
-    assert_eq!(na.to_string(), "<sip:alice@example.com>");
-    roundtrip_nameaddr(&na.to_string());
-}
-
-#[test]
-fn nameaddr_special_chars_in_display_name() {
-    let na: NameAddr = r#""John \"Doe\"" <sip:john@example.com>"#
-        .parse()
-        .unwrap();
-    assert_eq!(na.display_name(), Some(r#"John "Doe""#));
-}
-
-#[test]
 fn param_case_insensitive_lookup() {
     let uri: SipUri = "sip:host;Transport=TCP;User=phone"
         .parse()
@@ -1124,13 +983,10 @@ fn urn_service_sos_request_uri() {
 }
 
 #[test]
-fn urn_service_sos_in_to_header() {
-    // From production: <urn:service:sos:5060> in To header (malformed but real)
-    let na: NameAddr = "<urn:service:sos:5060>"
+fn urn_service_sos_with_port() {
+    // Seen in To headers: the `:5060` is part of the NSS, not a port.
+    let urn: UrnUri = "urn:service:sos:5060"
         .parse()
-        .unwrap();
-    let urn = na
-        .urn_uri()
         .unwrap();
     assert_eq!(urn.nss(), "sos:5060");
 }
@@ -1245,35 +1101,6 @@ fn urn_uuid_sip_instance() {
         urn.to_string(),
         "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
     );
-}
-
-#[test]
-fn urn_in_nameaddr_angle_brackets() {
-    // URNs commonly appear in SIP headers with angle brackets
-    let na: NameAddr = "<urn:service:sos>"
-        .parse()
-        .unwrap();
-    assert!(na
-        .display_name()
-        .is_none());
-    assert!(na
-        .urn_uri()
-        .is_some());
-    assert_eq!(na.to_string(), "<urn:service:sos>");
-}
-
-#[test]
-fn urn_in_nameaddr_with_purpose_param() {
-    // Call-Info header format: <URN>;purpose=value
-    // NameAddr doesn't parse header params (those are at the SIP header level)
-    // but the URN inside the angle brackets must parse
-    let na: NameAddr = "<urn:nena:callid:abc123:host.example.com>"
-        .parse()
-        .unwrap();
-    let urn = na
-        .urn_uri()
-        .unwrap();
-    assert_eq!(urn.nid(), "nena");
 }
 
 #[test]

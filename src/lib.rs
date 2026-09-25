@@ -37,7 +37,6 @@
 
 mod error;
 mod host;
-mod name_addr;
 pub(crate) mod params;
 pub(crate) mod parse;
 mod sip_uri;
@@ -46,13 +45,8 @@ mod uri;
 mod urn_uri;
 mod warning;
 
-pub use error::{
-    ParseHostError, ParseNameAddrError, ParseSipUriError, ParseTelUriError, ParseUriError,
-    ParseUrnError,
-};
+pub use error::{ParseHostError, ParseSipUriError, ParseTelUriError, ParseUriError, ParseUrnError};
 pub use host::{Bare, Host};
-#[allow(deprecated)]
-pub use name_addr::NameAddr;
 pub use parse::{decode_user, encode_uri_header};
 pub use sip_uri::{Scheme, SipUri};
 pub use tel_uri::TelUri;

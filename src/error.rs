@@ -77,21 +77,3 @@ impl fmt::Display for ParseHostError {
 }
 
 impl std::error::Error for ParseHostError {}
-
-/// Error returned when parsing a [`NameAddr`](crate::NameAddr) fails.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseNameAddrError(pub String);
-
-impl fmt::Display for ParseNameAddrError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid name-addr: {}", self.0)
-    }
-}
-
-impl std::error::Error for ParseNameAddrError {}
-
-impl From<ParseUriError> for ParseNameAddrError {
-    fn from(e: ParseUriError) -> Self {
-        ParseNameAddrError(e.0)
-    }
-}

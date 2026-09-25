@@ -36,7 +36,6 @@ sip-uri = "0.2"
 | `TelUri` | tel: URI with number, params, fragment |
 | `UrnUri` | URN with NID, NSS, and optional r/q/f components |
 | `Uri` | Enum dispatching `Sip` / `Tel` / `Urn` / `Other` based on scheme |
-| `NameAddr` | *Deprecated* -- display name + URI (`"Alice" <sip:...>`), will be removed in 0.3.0 |
 | `Host` | IPv4, IPv6, or hostname |
 | `Scheme` | `Sip` or `Sips` |
 
@@ -167,22 +166,14 @@ NID is validated per RFC 8141 (2-32 chars, alphanum bookends) and stored
 lowercase. NSS percent-encoding hex digits are uppercased for canonical
 comparison but never decoded.
 
-## NameAddr (deprecated)
+## Display names and header parameters (`name-addr`)
 
-`NameAddr` is deprecated since 0.2.0 and will be removed in 0.3.0.
-
-The `name-addr` production (RFC 3261 §25.1) appears inside SIP header
-fields where it is followed by header-level parameters (`;tag=`,
-`;expires=`, `;serviceurn=`, etc.). This type rejects those parameters,
-so it cannot round-trip real SIP header values.
-
-**Migration:**
-
-- For SIP header parsing (From, To, Contact, Refer-To), use
-  [`SipHeaderAddr`](https://docs.rs/sip-header/latest/sip_header/struct.SipHeaderAddr.html)
-  from [`sip-header`](https://crates.io/crates/sip-header),
-  which handles display names, URIs, and header-level parameters.
-- If you only need the URI, parse it directly with `Uri`.
+This crate parses URIs only. `"Alice" <sip:alice@example.com>;tag=abc` is
+header grammar: parse it with
+[`SipHeaderAddr`](https://docs.rs/sip-header/latest/sip_header/struct.SipHeaderAddr.html)
+from [`sip-header`](https://crates.io/crates/sip-header), which handles display
+names, URIs and header-level parameters and re-exports this crate. Code
+written against sip-uri 0.2's `NameAddr` moves to `SipHeaderAddr`.
 
 ## Percent-encoding
 
