@@ -26,9 +26,11 @@ Real SIP traffic and the sofia-sip torture corpus put both unescaped in URI para
 
 A URI header value is re-encoded to its canonical form, every byte outside the `hnv` set escaped, so a literal and an escaped `@` compare equal and match what `encode_uri_header` produces. Header consumers decode before use, so nothing downstream reads the difference. A user part is compared against dialplan numbers as it stands and carries the unescaped `#` that phones send, so it is only normalized where escaping is optional, never re-encoded, and a character outside its set warns instead.
 
-## Display round-trips through the parser, not the input
+## Display is the only wire form; other renderings are adapters
 
-`parse(display(parse(x))) == parse(x)` holds for every accepted input; `display(parse(x)) == x` does not, since canonization normalizes escapes and case. Any component the parser keeps must be emitted by Display, or the invariant breaks.
+Display emits the canonical form and is the one serializer, so `parse(display(parse(x))) == parse(x)` holds for every accepted input, while `display(parse(x)) == x` does not. Any component the parser keeps must be emitted by Display. Another rendering, such as a host without IPv6 brackets or a URI redacted for logs, is a method returning its own Display adapter, never a second serializer.
+
+Display's output is API that no tooling guards: a trait impl cannot be deprecated and semver checks do not read output. A change to what it emits therefore ships only in a breaking release, after the rendering it replaces is available as an adapter. Display carries the user part and password, so logs use the redacted rendering, never Display.
 
 ## The crate parses URIs, never header fields
 
