@@ -2,6 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::error::ParseUrnError;
+use crate::parse::{percent_decode, validate_pct_encoded};
 
 /// URN (Uniform Resource Name) per RFC 8141.
 ///
@@ -146,56 +147,11 @@ fn validate_nss(nss: &str) -> Result<(), String> {
     if nss.is_empty() {
         return Err("NSS must not be empty".into());
     }
-
-    let bytes = nss.as_bytes();
-    let mut i = 0;
-
-    // First char must be pchar (not "/")
-    if bytes[0] == b'/' {
+    if nss.starts_with('/') {
         return Err("NSS must not start with '/'".into());
     }
-
-    while i < bytes.len() {
-        if bytes[i] == b'%' {
-            if i + 2 >= bytes.len()
-                || !bytes[i + 1].is_ascii_hexdigit()
-                || !bytes[i + 2].is_ascii_hexdigit()
-            {
-                return Err(format!("invalid percent-encoding at position {i}"));
-            }
-            i += 3;
-        } else if is_pchar(bytes[i]) || bytes[i] == b'/' {
-            i += 1;
-        } else {
-            return Err(format!(
-                "invalid character '{}' in NSS at position {i}",
-                bytes[i] as char
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-/// Uppercase hex digits in percent-encoded sequences for canonical comparison.
-fn canonize_percent_encoding(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len());
-    let mut i = 0;
-
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            out.push('%');
-            out.push((bytes[i + 1] as char).to_ascii_uppercase());
-            out.push((bytes[i + 2] as char).to_ascii_uppercase());
-            i += 3;
-        } else {
-            out.push(bytes[i] as char);
-            i += 1;
-        }
-    }
-
-    out
+    validate_pct_encoded(nss, |b| is_pchar(b) || b == b'/')
+        .map_err(|pos| format!("invalid character in NSS at position {pos}"))
 }
 
 impl FromStr for UrnUri {
@@ -244,7 +200,7 @@ impl FromStr for UrnUri {
 
         // Validate and canonize NSS
         validate_nss(nss_str).map_err(|e| err(&e))?;
-        let nss = canonize_percent_encoding(nss_str);
+        let nss = percent_decode(nss_str, |_| false);
 
         // Parse rq-components: [ "?+" r-component ] [ "?=" q-component ]
         let (r_component, q_component) = if let Some(rq) = rq_str {

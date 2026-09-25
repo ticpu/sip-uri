@@ -92,10 +92,9 @@ impl Uri {
     /// The scheme of this URI (lowercase).
     pub fn scheme(&self) -> &str {
         match self {
-            Uri::Sip(u) => match u.scheme() {
-                crate::Scheme::Sip => "sip",
-                crate::Scheme::Sips => "sips",
-            },
+            Uri::Sip(u) => u
+                .scheme()
+                .as_str(),
             Uri::Tel(_) => "tel",
             Uri::Urn(_) => "urn",
             // Uri::Other is only constructed by FromStr, which requires ':'

@@ -41,12 +41,19 @@ pub enum Scheme {
     Sips,
 }
 
+impl Scheme {
+    /// The scheme name as it appears before `:`, lowercase.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Scheme::Sip => "sip",
+            Scheme::Sips => "sips",
+        }
+    }
+}
+
 impl fmt::Display for Scheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Scheme::Sip => write!(f, "sip"),
-            Scheme::Sips => write!(f, "sips"),
-        }
+        f.write_str(self.as_str())
     }
 }
 
@@ -267,14 +274,6 @@ impl FromStr for SipUri {
 fn split_userinfo_host(s: &str) -> Result<(Option<&str>, &str), ParseSipUriError> {
     let err = |msg: &str| ParseSipUriError(msg.to_string());
 
-    // Find the `@` delimiter. In SIP, the user part can contain ;/?/ and even #
-    // (non-conformant phones), so we can't just scan for the first special char.
-    // Strategy: find the last `@` before any unescaped `?` that starts headers
-    // (headers can contain `@` too, e.g., From=foo@bar).
-    //
-    // Actually, per the ABNF, `@` is not in user-unreserved, so any literal `@`
-    // in the pre-headers portion is THE delimiter. We find the rightmost one
-    // before `?` to handle edge cases.
     if let Some(at_pos) = parse::find_userinfo_at(s) {
         if at_pos == 0 {
             return Err(err("empty userinfo before @"));
@@ -294,23 +293,10 @@ fn split_userinfo_host(s: &str) -> Result<(Option<&str>, &str), ParseSipUriError
 /// Parse the userinfo portion into (user, user_params, password).
 ///
 /// Userinfo structure: `user [*(";" user-param)] [":" password]`
-///
-/// The tricky part: `;` and `:` are both allowed in the user part as
-/// user-unreserved chars. But the RFC grammar says user-params are
-/// separated by `;` and password follows `:`.
-///
-/// We split on `:` first to separate user+params from password,
-/// then split the user portion on `;` to separate user from user-params.
 fn parse_userinfo(s: &str) -> UserinfoResult {
     let err = |msg: &str| ParseSipUriError(msg.to_string());
 
-    // Split user(+params) from password on first `:`
-    // But `:` is in user-unreserved for SIP! The RFC ABNF says:
-    //   userinfo = (user / telephone-subscriber) [":" password] "@"
-    //   user = 1*(unreserved / escaped / user-unreserved)
-    // And user-unreserved does NOT include `:` — that's the password delimiter.
-    // Looking at the ABNF more carefully: user-unreserved = "&"/"="/"+"/"$"/","/";"/"?"/"/"
-    // So `:` is NOT user-unreserved. The first `:` splits user from password.
+    // `:` is not user-unreserved, so the first one starts the password.
     let (user_and_params, password) = if let Some(colon_pos) = s.find(':') {
         let pwd = &s[colon_pos + 1..];
         (&s[..colon_pos], Some(parse::canonize_password(pwd)))

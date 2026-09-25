@@ -1,33 +1,14 @@
-use crate::parse::{canonize_param, canonize_user, is_paramchar, is_user_char};
+use crate::parse::{
+    canonize_header, canonize_param, canonize_user, is_paramchar, is_user_char,
+    validate_pct_encoded,
+};
 
 /// Parse a `;`-separated parameter string into a list of `(name, Option<value>)` pairs.
 ///
-/// Input should NOT include the leading `;`. Parameters are separated by `;`.
-/// Each parameter is `name` or `name=value`. Values and names are canonized
-/// (percent-decoded where allowed by the paramchar set).
+/// Input should NOT include the leading `;`. Each parameter is `name` or
+/// `name=value`, validated against and canonized for the paramchar set.
 pub(crate) fn parse_params(s: &str) -> Result<Vec<(String, Option<String>)>, String> {
-    if s.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut params = Vec::new();
-
-    for part in s.split(';') {
-        if part.is_empty() {
-            continue;
-        }
-
-        if let Some((name, value)) = part.split_once('=') {
-            validate_param_chars(name, "parameter name")?;
-            validate_param_chars(value, "parameter value")?;
-            params.push((canonize_param(name), Some(canonize_param(value))));
-        } else {
-            validate_param_chars(part, "parameter name")?;
-            params.push((canonize_param(part), None));
-        }
-    }
-
-    Ok(params)
+    parse_param_list(s, is_paramchar, canonize_param, "parameter")
 }
 
 /// Parse user-params from the userinfo section of a SIP URI.
@@ -35,33 +16,35 @@ pub(crate) fn parse_params(s: &str) -> Result<Vec<(String, Option<String>)>, Str
 /// User-params use the `user` character set (unreserved + user-unreserved)
 /// which includes `?` and `/`, unlike URI params which use `paramchar`.
 pub(crate) fn parse_user_params(s: &str) -> Result<Vec<(String, Option<String>)>, String> {
-    if s.is_empty() {
-        return Ok(Vec::new());
-    }
+    parse_param_list(s, is_user_char, canonize_user, "user parameter")
+}
+
+fn parse_param_list(
+    s: &str,
+    allowed: fn(u8) -> bool,
+    canonize: fn(&str) -> String,
+    context: &str,
+) -> Result<Vec<(String, Option<String>)>, String> {
+    let validate = |part: &str, what: &str| {
+        validate_pct_encoded(part, allowed)
+            .map_err(|pos| format!("invalid character in {context} {what} at position {pos}"))
+    };
 
     let mut params = Vec::new();
-
     for part in s.split(';') {
         if part.is_empty() {
             continue;
         }
-
         if let Some((name, value)) = part.split_once('=') {
-            validate_user_param_chars(name, "user parameter name")?;
-            validate_user_param_chars(value, "user parameter value")?;
-            params.push((canonize_user(name), Some(canonize_user(value))));
+            validate(name, "name")?;
+            validate(value, "value")?;
+            params.push((canonize(name), Some(canonize(value))));
         } else {
-            validate_user_param_chars(part, "user parameter name")?;
-            params.push((canonize_user(part), None));
+            validate(part, "name")?;
+            params.push((canonize(part), None));
         }
     }
-
     Ok(params)
-}
-
-fn validate_user_param_chars(s: &str, context: &str) -> Result<(), String> {
-    crate::parse::validate_pct_encoded(s, is_user_char)
-        .map_err(|pos| format!("invalid character in {context} at position {pos}"))
 }
 
 /// Parse header parameters from the `?` section: `name=value` pairs separated by `&`.
@@ -83,21 +66,13 @@ pub(crate) fn parse_headers(s: &str) -> Result<Vec<(String, String)>, String> {
             if name.is_empty() {
                 return Err("empty header name".into());
             }
-            headers.push((
-                crate::parse::canonize_header(name),
-                crate::parse::canonize_header(value),
-            ));
+            headers.push((canonize_header(name), canonize_header(value)));
         } else {
             return Err(format!("header missing '=' in '{part}'"));
         }
     }
 
     Ok(headers)
-}
-
-fn validate_param_chars(s: &str, context: &str) -> Result<(), String> {
-    crate::parse::validate_pct_encoded(s, is_paramchar)
-        .map_err(|pos| format!("invalid character in {context} at position {pos}"))
 }
 
 /// Format parameters as a `;`-separated string with leading `;` for each.

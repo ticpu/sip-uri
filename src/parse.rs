@@ -69,7 +69,7 @@ fn hex_digit(c: u8) -> Option<u8> {
 /// Only decodes `%XX` sequences where the decoded byte satisfies `allow_decoded`.
 /// Other sequences stay encoded with hex normalized to uppercase. A `%` not
 /// followed by two hex digits is copied verbatim.
-fn percent_decode_bytes(input: &str, allow_decoded: fn(u8) -> bool) -> Vec<u8> {
+fn percent_decode_bytes(input: &str, allow_decoded: impl Fn(u8) -> bool) -> Vec<u8> {
     let bytes = input.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -98,18 +98,14 @@ fn percent_decode_bytes(input: &str, allow_decoded: fn(u8) -> bool) -> Vec<u8> {
 
 /// Percent-decode a string, applying a component-specific filter.
 ///
-/// Only decodes `%XX` sequences where the decoded byte satisfies `allow_decoded`.
+/// Only decodes `%XX` sequences to an ASCII byte satisfying `allow_decoded`.
 /// Characters that are reserved in this component stay encoded.
 /// Hex digits in percent-encoding are normalized to uppercase.
 pub(crate) fn percent_decode(input: &str, allow_decoded: fn(u8) -> bool) -> String {
-    let out = percent_decode_bytes(input, allow_decoded);
+    let out = percent_decode_bytes(input, |b| b.is_ascii() && allow_decoded(b));
 
-    // SAFETY: All allow_decoded predicates (is_unreserved, is_user_char,
-    // is_paramchar, is_hnv_char, is_password_char) only return true for bytes
-    // in 0x00-0x7F (they call is_ascii_alphanumeric() or match on specific
-    // ASCII literals). Decoded bytes are therefore single-byte valid UTF-8.
-    // Undecoded bytes are copied verbatim from input, which is valid UTF-8
-    // by the &str invariant.
+    // SAFETY: only ASCII bytes are decoded; everything else is copied from a
+    // &str, so the output is valid UTF-8.
     unsafe { String::from_utf8_unchecked(out) }
 }
 
@@ -222,26 +218,11 @@ pub fn encode_uri_header(s: &str) -> Cow<'_, str> {
 
 /// Find the `@` delimiter that separates userinfo from hostport in a SIP URI.
 ///
-/// Uses the sofia-sip two-phase algorithm (url.c:616-626). `@` is not in
-/// user-unreserved per RFC 3261, but `/;?#` are. Phase 1 scans to the first
-/// `@/;?#`. Phase 2 scans forward from there looking for `@`. If found,
-/// everything before it is userinfo.
-///
-/// This correctly handles `@` in headers (`?From=foo@bar`) which is
-/// technically non-conformant but universal in practice: Phase 1 reaches `?`
-/// (a user-unreserved char), Phase 2 scans past the `@` in headers only if
-/// there's a real `@` delimiter earlier.
+/// Uses the sofia-sip two-phase algorithm (url.c:616-626): scan to the first
+/// `@/;?#`, then take the first `@` from there on. Everything before it is
+/// userinfo. Without userinfo, a literal `@` in a param or header value is
+/// therefore taken as the delimiter; see docs/design-rationale.md.
 pub(crate) fn find_userinfo_at(s: &str) -> Option<usize> {
-    // Sofia-sip algorithm (url.c line 616-626):
-    // 1. Find first char in "@/;?#" (easy delimiters or user-unreserved)
-    // 2. From there, scan forward looking for '@'
-    // 3. If found, everything before '@' is userinfo
-    //
-    // This works because in a SIP URI without userinfo like
-    // "host:port;params?headers", the first /;?# terminates the
-    // host scan, and there's no @ after it in the hostport+params
-    // section (@ would be %40 there). But with userinfo, the /;?#
-    // are part of the user, and the real @ follows them.
     let bytes = s.as_bytes();
     let mut i = 0;
 

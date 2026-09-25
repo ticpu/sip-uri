@@ -769,18 +769,6 @@ fn ng911_nameaddr_tel_with_params() {
 // ========================================================================
 
 #[test]
-fn sofia_percent_decode_scheme_and_user() {
-    // %53ip = Sip, %75 = u, %48 = H
-    // These are scheme/host percent-encodings that sofia-sip decodes
-    // Our parser requires literal scheme, so test with decoded form
-    let uri: SipUri = "sip:u@h"
-        .parse()
-        .unwrap();
-    assert_eq!(uri.user(), Some("u"));
-    assert_eq!(uri.host(), &Host::Hostname("h".into()));
-}
-
-#[test]
 fn sofia_canonize_method_param() {
     // method=%4D%45%53%53%41%47%45 = METHOD (all unreserved, decode)
     let uri: SipUri = "sip:pekka.pessi@nokia.com;method=%4D%45%53%53%41%47%45?body=CANNED%20MSG"

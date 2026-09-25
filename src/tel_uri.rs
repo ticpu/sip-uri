@@ -86,18 +86,10 @@ impl FromStr for TelUri {
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         let err = |msg: &str| ParseTelUriError(msg.to_string());
 
-        // Strip scheme
         let rest = input
-            .strip_prefix("tel:")
-            .or_else(|| input.strip_prefix("TEL:"))
-            .or_else(|| {
-                let colon = input.find(':')?;
-                if input[..colon].eq_ignore_ascii_case("tel") {
-                    Some(&input[colon + 1..])
-                } else {
-                    None
-                }
-            })
+            .split_once(':')
+            .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("tel"))
+            .map(|(_, rest)| rest)
             .ok_or_else(|| err("missing 'tel:' scheme"))?;
 
         if rest.is_empty() {
