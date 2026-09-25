@@ -74,18 +74,19 @@ impl<'a> Redaction<'a> {
     }
 }
 
-/// [`fmt::Display`] adapter returned by the `redacted` methods.
+/// [`fmt::Display`] adapter returned by [`UriRedact::redacted`].
 #[derive(Debug, Clone, Copy)]
 pub struct Redacted<'a, T> {
     uri: &'a T,
     how: Redaction<'a>,
 }
 
-impl SipUri {
+/// Rendering for logs, for [`SipUri`], [`TelUri`] and [`Uri`].
+pub trait UriRedact: Sized {
     /// Render for logs, masking what `how` names.
     ///
     /// ```
-    /// use sip_uri::{Redaction, SipUri, UriParse, UserMask};
+    /// use sip_uri::{Redaction, SipUri, UriParse, UriRedact, UserMask};
     ///
     /// let uri = SipUri::parse("sip:+15551234567;cpc=emergency:pw@example.com").unwrap();
     /// assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com");
@@ -94,21 +95,23 @@ impl SipUri {
     ///     "sip:+xxxxxxx4567;cpc=emergency:***@example.com"
     /// );
     /// ```
-    pub fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, SipUri> {
+    fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Self>;
+}
+
+impl UriRedact for SipUri {
+    fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Self> {
         Redacted { uri: self, how }
     }
 }
 
-impl TelUri {
-    /// Render for logs, masking what `how` names.
-    pub fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, TelUri> {
+impl UriRedact for TelUri {
+    fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Self> {
         Redacted { uri: self, how }
     }
 }
 
-impl Uri {
-    /// Render for logs, masking what `how` names.
-    pub fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Uri> {
+impl UriRedact for Uri {
+    fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Self> {
         Redacted { uri: self, how }
     }
 }

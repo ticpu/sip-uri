@@ -52,7 +52,7 @@ pub use canon::{decode_user, encode_uri_header};
 pub use error::ParseError;
 pub use host::{Bare, Host, Hostname};
 pub use parser::UriParse;
-pub use redact::{Redacted, Redaction, UserMask};
+pub use redact::{Redacted, Redaction, UriRedact, UserMask};
 pub use sip_uri::{Scheme, SipUri, SipUriParts};
 pub use tel_uri::{TelUri, TelUriParts};
 pub use uri::{OtherUri, Uri};

@@ -1,4 +1,4 @@
-use sip_uri::{Redaction, SipUri, TelUri, Uri, UriParse, UserMask};
+use sip_uri::{Redaction, SipUri, TelUri, Uri, UriParse, UriRedact, UserMask};
 
 fn sip(s: &str) -> SipUri {
     SipUri::parse(s).unwrap()

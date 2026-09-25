@@ -41,7 +41,7 @@ sip-uri = "0.3"
 | `Scheme` | `Sip` or `Sips` |
 | `ParseError` | `Empty`, `SchemeMismatch`, or `NonConformant` from a strict parse |
 | `Parsed` / `ParseWarning` | Value plus the grammar breaches the parser accepted |
-| `Redaction` | What `redacted()` masks when a URI is rendered for logs |
+| `Redaction` | What `UriRedact::redacted()` masks when a URI is rendered for logs |
 | `Scheme` | `Sip` or `Sips` |
 
 The URI and host types implement `UriParse`, `Display`, `Debug`, `Clone`, `PartialEq`, `Eq` and `Hash`.
@@ -234,12 +234,12 @@ input.
 
 ## Logging
 
-`Display` writes the user part and password. For logs, `redacted()` renders
+`Display` writes the user part and password. For logs, `UriRedact::redacted()` renders
 through a `Redaction`: by default the whole userinfo, or a tel: number, becomes
 `***`, and the caller relaxes that per deployment policy.
 
 ```rust
-use sip_uri::{Redaction, SipUri, UriParse, UserMask};
+use sip_uri::{Redaction, SipUri, UriParse, UriRedact, UserMask};
 
 let uri = SipUri::parse("sip:+15551234567:pw@example.com").unwrap();
 assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com");
@@ -268,6 +268,7 @@ assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
 | `"*".parse::<Uri>()` is `Err` | `Uri::Other` with a `Wildcard` warning |
 | `FromStr`: `s.parse::<SipUri>()` | `UriParse`: `SipUri::parse(s)`, with `sip_uri::UriParse` in scope |
 | inherent `parse_with_warnings`, `parse_strict` | the same names on `UriParse` |
+| inherent `redacted()` | `UriRedact::redacted()`, with `sip_uri::UriRedact` in scope |
 | `SipUri`, `TelUri`, `UrnUri`, `Uri` without `Hash` | `Hash`, consistent with `Eq` |
 | no parts type | `SipUriParts`, `TelUriParts`, `UrnUriParts` through `From`, and `into_parts()` |
 
