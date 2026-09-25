@@ -20,7 +20,7 @@ use sip_uri::{Host, ParseWarning, SipUri, Uri, UrnUri};
 
 /// Separator for the `vars` payload, matching the `^^|` prefix the dialplan
 /// hands to `multiset`. Any component containing it aborts the whole payload:
-/// the user part decodes `%3B`/`%3D` and accepts a raw delimiter, so no
+/// the user part decodes `%3D` and keeps a raw delimiter with a warning, so no
 /// character is safe by construction.
 const DELIM: char = '|';
 

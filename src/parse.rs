@@ -175,10 +175,32 @@ pub(crate) fn validate_pct_encoded(input: &str, allowed: fn(u8) -> bool) -> Resu
     Ok(())
 }
 
+/// Octets a user part writes literally in canonical form. `;` stays escaped,
+/// since a literal one starts user-params.
+pub(crate) fn is_user_literal(c: u8) -> bool {
+    is_user_char(c) && c != b';'
+}
+
+/// Octets a user-param name writes literally, where `=` would start the value.
+pub(crate) fn is_user_param_name_literal(c: u8) -> bool {
+    is_user_literal(c) && c != b'='
+}
+
+/// Octets a URI param writes literally. `@` stays escaped, since a literal one
+/// in a URI without userinfo is read as the userinfo delimiter.
+pub(crate) fn is_param_literal(c: u8) -> bool {
+    is_paramchar(c) && c != b'@'
+}
+
 /// Canonize a percent-encoded user component: decode unreserved + user-unreserved,
 /// uppercase remaining %XX.
 pub(crate) fn canonize_user(input: &str) -> String {
-    percent_decode(input, is_user_char)
+    percent_decode(input, is_user_literal)
+}
+
+/// Canonize a user-param name.
+pub(crate) fn canonize_user_param_name(input: &str) -> String {
+    percent_decode(input, is_user_param_name_literal)
 }
 
 /// Canonize a percent-encoded password component.
@@ -188,7 +210,7 @@ pub(crate) fn canonize_password(input: &str) -> String {
 
 /// Canonize a percent-encoded parameter component.
 pub(crate) fn canonize_param(input: &str) -> String {
-    percent_decode(input, is_paramchar)
+    percent_decode(input, is_param_literal)
 }
 
 /// Canonize a header name or value: every octet, escaped or literal, is

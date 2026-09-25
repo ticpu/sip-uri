@@ -131,9 +131,9 @@ material for a discrepancy report upstream, and a dialplan can branch on it:
 ```
 
 The `^^|` prefix tells `multiset` to split the payload on `|` instead of a
-space. That delimiter cannot be assumed safe: the parser decodes `%3B` and
-`%3D` in a user part, so it can legitimately contain `;` or `=`, and a raw `|`
-in a user part is accepted as well. Rather than emit a payload that would
+space. That delimiter cannot be assumed safe: the parser decodes `%3D` in a
+user part, so it can legitimately contain `=`, and a raw `|` in a user part is
+accepted as well, with a warning. Rather than emit a payload that would
 silently set an unintended variable, `vars` refuses:
 
 ```

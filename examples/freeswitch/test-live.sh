@@ -131,8 +131,8 @@ check '<sip:1305@pbx.example.com;user=phone>' uri_user=1305 uri_param_user=phone
 
 check 'sip:1411@[2001:db8::1]:5061;user=phone' uri_host='[2001:db8::1]' uri_port=5061
 
-# %3B decodes to ';' in the user part, so the payload must not use ';'.
-check 'sip:a%3Bb@host.example.com' uri_user='a;b'
+# %3B stays escaped in the user part, since a literal ';' starts user-params.
+check 'sip:a%3Bb@host.example.com' uri_user='a%3Bb'
 
 # multiset splits each pair on the first '=', so a value may contain one.
 check 'sip:a%3Db@host.example.com' uri_user='a=b'

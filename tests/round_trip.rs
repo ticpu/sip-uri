@@ -1168,3 +1168,23 @@ fn encode_uri_header_round_trips_through_parse() {
         .unwrap();
     assert_eq!(uri.header("Replaces"), Some(replaces.as_ref()));
 }
+
+#[test]
+fn escaped_delimiters_survive_display() {
+    for input in [
+        "sip:a%3Bb@example.com",
+        "sip:alice;x%3Dy=1@example.com",
+        "sip:alice;x=a%3Bb@example.com",
+        "sip:example.com;maddr=a%40b",
+        "sip:example.com?From=a%40b",
+    ] {
+        let parsed: SipUri = input
+            .parse()
+            .unwrap();
+        let reparsed: SipUri = parsed
+            .to_string()
+            .parse()
+            .unwrap();
+        assert_eq!(reparsed, parsed, "{input} -> {parsed}");
+    }
+}

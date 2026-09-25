@@ -1,6 +1,6 @@
 use crate::parse::{
-    canonize_header, canonize_param, canonize_user, is_hnv_char, is_param_strict, is_tel_paramchar,
-    is_tel_pname_char, is_user_char,
+    canonize_header, canonize_param, canonize_user, canonize_user_param_name, is_hnv_char,
+    is_param_strict, is_tel_paramchar, is_tel_pname_char, is_user_char,
 };
 use crate::warning::{Component, WarningCode, Warnings};
 
@@ -10,7 +10,8 @@ pub(crate) struct ParamGrammar {
     /// Conformant names and values; any other byte is kept and warns.
     name: fn(u8) -> bool,
     value: fn(u8) -> bool,
-    canonize: fn(&str) -> String,
+    canonize_name: fn(&str) -> String,
+    canonize_value: fn(&str) -> String,
 }
 
 /// SIP URI params after the host.
@@ -18,7 +19,8 @@ pub(crate) const SIP_PARAMS: ParamGrammar = ParamGrammar {
     component: Component::Param,
     name: is_param_strict,
     value: is_param_strict,
-    canonize: canonize_param,
+    canonize_name: canonize_param,
+    canonize_value: canonize_param,
 };
 
 /// SIP user-params inside the userinfo.
@@ -26,7 +28,8 @@ pub(crate) const USER_PARAMS: ParamGrammar = ParamGrammar {
     component: Component::UserParam,
     name: is_user_char,
     value: is_user_char,
-    canonize: canonize_user,
+    canonize_name: canonize_user_param_name,
+    canonize_value: canonize_user,
 };
 
 /// tel: URI params (RFC 3966).
@@ -34,7 +37,8 @@ pub(crate) const TEL_PARAMS: ParamGrammar = ParamGrammar {
     component: Component::Param,
     name: is_tel_pname_char,
     value: is_tel_paramchar,
-    canonize: canonize_param,
+    canonize_name: canonize_param,
+    canonize_value: canonize_param,
 };
 
 /// Parse the params following a `;`, which is not included in `s`.
@@ -62,8 +66,8 @@ pub(crate) fn parse_params(
             warnings.charset(component, value, grammar.value);
         }
         params.push((
-            (grammar.canonize)(name),
-            value.map(|v| (grammar.canonize)(v)),
+            (grammar.canonize_name)(name),
+            value.map(|v| (grammar.canonize_value)(v)),
         ));
     }
     params
