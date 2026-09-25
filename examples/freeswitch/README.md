@@ -34,7 +34,7 @@ variable in `vars.xml` gets the path out of every call site:
 
 `$${fs_sip_uri}` is then substituted at XML parse time, so conditions read as
 one call rather than a path. [dialplan-example.xml](dialplan-example.xml) is a
-worked example using it: parse once, refuse to route on a parse failure, then
+worked example using it: parse once, refuse to route without a usable host, then
 branch on the result.
 
 ## Reading one field
@@ -81,8 +81,8 @@ The three shapes that cover almost everything:
 ```
 
 A URI with no such component prints nothing and exits 0, so an absent component
-and a parse failure both expand to the empty string and both match `^$` — see
-the error contract below for telling them apart.
+and a failed run both expand to the empty string and both match `^$` — see the
+error contract below.
 
 | field | value |
 | --- | --- |
@@ -176,34 +176,37 @@ before calling this.
 
 ## Error contract
 
+The parser rejects only an empty URI. Anything else parses: a non-conformant
+URI comes back with its readable components and a `warnings` list, and text
+that is not a SIP, tel or URN URI at all (`garbage-not-a-uri`) is `type`
+`other` with `scheme:missing-scheme`.
+
 Failures print nothing on stdout, write one line to stderr, and exit non-zero:
-1 for an unparsable URI or a payload `vars` refused to emit, 2 for a field name
-that does not exist. FreeSWITCH logs the child's stderr and its exit status,
-both naming the full command:
+1 for an empty URI or a payload `vars` refused to emit, 2 for a field name that
+does not exist. FreeSWITCH logs the child's stderr and its exit status, both
+naming the full command:
 
 ```
-[WARNING] switch_core.c:3481 STDERR of cmd (…/fs-sip-uri get user garbage-not-a-uri):
-          fs-sip-uri: cannot parse URI: invalid URI: missing scheme
-[WARNING] switch_core.c:3494 Exit status (256): …/fs-sip-uri get user garbage-not-a-uri
+[WARNING] switch_core.c:3481 STDERR of cmd (…/fs-sip-uri get bogus sip:a@example.com):
+          fs-sip-uri: unknown field "bogus"
+[WARNING] switch_core.c:3494 Exit status (512): …/fs-sip-uri get bogus sip:a@example.com
 ```
 
 That status is the raw `waitpid` value rather than the exit code, so exit 1
 logs as 256 and exit 2 as 512.
 
-Nothing is logged on success. Because every failure mode expands to an empty
-string, guard explicitly rather than letting an unparsed header fall through to
-the next condition — an empty `${uri_user}` will otherwise build a URI out of
-`${uri_host}` alone and reach the wrong endpoint:
+Nothing is logged on success. A failed run and an absent component both expand
+to the empty string, so guard on the components the next step needs rather than
+letting an unusable header fall through: an empty `${uri_host}` would otherwise
+build `sip:${uri_user}@` and reach nothing, or the wrong endpoint.
 
 ```xml
-<condition field="${uri_type}" expression="^$" break="on-true">
-    <action application="log" data="ERR unparsable caller id header"/>
-    <action application="hangup" data="NORMAL_UNSPECIFIED"/>
+<condition field="${uri_type}:${uri_host}" expression="^sip:.+$" break="on-false">
+    <anti-action application="log" data="ERR no usable SIP host in caller id header"/>
+    <anti-action application="hangup" data="NORMAL_UNSPECIFIED"/>
 </condition>
 ```
 
-`uri_type` is the field to test: `vars` always emits it on success, so its
-absence means the parse failed rather than the URI lacking that component.
 Where a single `get` is enough, match the failure instead of the success, so
 the empty string lands in the reject branch:
 

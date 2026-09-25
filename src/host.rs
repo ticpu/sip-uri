@@ -25,33 +25,34 @@ impl Host {
     /// Parse a host from a URI string fragment.
     ///
     /// Handles `[IPv6]`, dotted-decimal IPv4, and DNS hostnames.
-    /// Returns the parsed host and the number of bytes consumed.
-    pub(crate) fn parse_from_uri(
-        s: &str,
-        warnings: &mut Warnings,
-    ) -> Result<(Self, usize), String> {
-        if s.is_empty() {
-            return Err("empty host".into());
+    /// Returns the host, `None` when absent or unreadable, and the bytes consumed.
+    pub(crate) fn parse_from_uri(s: &str, warnings: &mut Warnings) -> (Option<Self>, usize) {
+        if let Some(inner) = s.strip_prefix('[') {
+            // IPv6reference = "[" IPv6address "]"
+            let Some(end) = inner.find(']') else {
+                warnings.push(Component::Host, WarningCode::InvalidIpv6, s, 0);
+                return (
+                    None,
+                    s.find([';', '?', '#'])
+                        .unwrap_or(s.len()),
+                );
+            };
+            return match inner[..end].parse::<Ipv6Addr>() {
+                Ok(addr) => (Some(Host::IPv6(addr)), end + 2),
+                Err(_) => {
+                    warnings.push(Component::Host, WarningCode::InvalidIpv6, s, 0);
+                    (None, end + 2)
+                }
+            };
         }
 
-        if s.starts_with('[') {
-            // IPv6reference = "[" IPv6address "]"
-            let end = s
-                .find(']')
-                .ok_or_else(|| "unclosed IPv6 bracket".to_string())?;
-            let addr_str = &s[1..end];
-            let addr: Ipv6Addr = addr_str
-                .parse()
-                .map_err(|e| format!("invalid IPv6 address: {e}"))?;
-            Ok((Host::IPv6(addr), end + 1))
-        } else {
-            // Find end of host: terminated by `:`, `;`, `?`, `#`, `>`, or end of string
-            // Must skip percent-encoded sequences when scanning
+        {
             let end = find_host_end(s);
             let host_str = &s[..end];
 
             if host_str.is_empty() {
-                return Err("empty host".into());
+                warnings.push(Component::Host, WarningCode::MissingHost, s, 0);
+                return (None, 0);
             }
 
             let decoded = if host_str.contains('%') {
@@ -67,20 +68,22 @@ impl Host {
                 .all(|b| b.is_ascii_digit() || b == b'.')
             {
                 if let Ok(addr) = decoded.parse::<Ipv4Addr>() {
-                    return Ok((Host::IPv4(addr), end));
+                    return (Some(Host::IPv4(addr)), end);
                 }
             }
 
-            // Validate hostname characters: alphanum, '-', '.'
-            if !decoded
+            match decoded
                 .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.'))
+                .position(|b| !(b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.')))
             {
-                return Err("invalid hostname character".into());
+                Some(pos) if decoded.len() == host_str.len() => {
+                    warnings.push(Component::Host, WarningCode::InvalidChar, host_str, pos)
+                }
+                Some(_) => warnings.push(Component::Host, WarningCode::InvalidChar, host_str, 0),
+                None => warn_hostname_labels(&decoded, host_str, warnings),
             }
-            warn_hostname_labels(&decoded, host_str, warnings);
 
-            Ok((Host::Hostname(decoded.to_ascii_lowercase()), end))
+            (Some(Host::Hostname(decoded.to_ascii_lowercase())), end)
         }
     }
 }
@@ -181,18 +184,20 @@ impl fmt::Display for Bare<'_> {
 /// reference. Bracketed IPv4 (`[192.0.2.1]`) is rejected: brackets are the
 /// `IPv6reference` production and the in-URI parser reads them the same way.
 ///
-/// The whole string must be a host. Anything a URI would put after it — a port,
-/// parameters, headers — is an error here, unlike parsing in URI position where
-/// those terminate the host.
+/// Anything a URI would put after the host (a port, parameters, headers) is
+/// dropped with a `TrailingContent` warning. Input with no readable host is the
+/// only error.
 ///
 /// ```
-/// use sip_uri::Host;
+/// use sip_uri::{Host, WarningCode};
 ///
 /// assert!("example.test".parse::<Host>().is_ok());
 /// assert!("192.0.2.1".parse::<Host>().is_ok());
 /// assert!("2001:db8::1".parse::<Host>().is_ok());
 /// assert!("[2001:db8::1]".parse::<Host>().is_ok());
-/// assert!("example.test:5060".parse::<Host>().is_err());
+/// let parsed = Host::parse_with_warnings("example.test:5060").unwrap();
+/// assert_eq!(parsed.warnings[0].code, WarningCode::TrailingContent);
+/// assert!("[2001:db8::1".parse::<Host>().is_err());
 /// ```
 impl FromStr for Host {
     type Err = ParseHostError;
@@ -215,11 +220,12 @@ impl Host {
             }
         }
 
-        let (host, consumed) = Host::parse_from_uri(s, &mut warnings).map_err(ParseHostError)?;
+        let (host, consumed) = Host::parse_from_uri(s, &mut warnings);
+        let Some(host) = host else {
+            return Err(ParseHostError("no readable host".into()));
+        };
         if consumed != s.len() {
-            return Err(ParseHostError(format!(
-                "trailing content after host at position {consumed}"
-            )));
+            warnings.push(Component::Host, WarningCode::TrailingContent, s, consumed);
         }
         Ok(warnings.finish(host))
     }
@@ -239,8 +245,9 @@ impl fmt::Display for Host {
 mod tests {
     use super::*;
 
-    fn from_uri(s: &str) -> Result<(Host, usize), String> {
-        Host::parse_from_uri(s, &mut Warnings::new(s))
+    fn from_uri(s: &str) -> Option<(Host, usize)> {
+        let (host, consumed) = Host::parse_from_uri(s, &mut Warnings::new(s));
+        host.map(|h| (h, consumed))
     }
 
     #[test]
@@ -355,15 +362,8 @@ mod tests {
     }
 
     #[test]
-    fn from_str_rejects_non_hosts() {
-        for input in [
-            "not a host:",
-            "example.test:5060",
-            "example.test;transport=tcp",
-            "[192.0.2.1]",
-            "[2001:db8::1",
-            "",
-        ] {
+    fn from_str_rejects_only_unreadable_hosts() {
+        for input in ["[192.0.2.1]", "[2001:db8::1", ":5060", ""] {
             assert!(
                 input
                     .parse::<Host>()
@@ -371,11 +371,23 @@ mod tests {
                 "expected rejection of {input:?}"
             );
         }
+        for input in [
+            "not a host:",
+            "example.test:5060",
+            "example.test;transport=tcp",
+        ] {
+            assert!(
+                Host::parse_with_warnings(input)
+                    .unwrap()
+                    .has_warnings(),
+                "expected warnings for {input:?}"
+            );
+        }
     }
 
     #[test]
-    fn empty_host_fails() {
-        assert!(from_uri("").is_err());
-        assert!(from_uri(":5060").is_err());
+    fn empty_host_is_none() {
+        assert!(from_uri("").is_none());
+        assert!(from_uri(":5060").is_none());
     }
 }

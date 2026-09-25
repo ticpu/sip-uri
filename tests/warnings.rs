@@ -230,7 +230,7 @@ fn invalid_host_labels() {
 #[test]
 fn numeric_toplabel() {
     let (uri, w) = sip("sip:999.1.1.1");
-    assert_eq!(uri.host(), &Host::Hostname("999.1.1.1".into()));
+    assert_eq!(uri.host(), Some(&Host::Hostname("999.1.1.1".into())));
     let w = only(&w, Component::Host, WarningCode::NumericToplabel);
     assert_eq!(w.position, Some(12));
 }
@@ -238,7 +238,7 @@ fn numeric_toplabel() {
 #[test]
 fn escaped_host() {
     let (uri, w) = sip("sip:alice@example%2Ecom");
-    assert_eq!(uri.host(), &Host::Hostname("example.com".into()));
+    assert_eq!(uri.host(), Some(&Host::Hostname("example.com".into())));
     only(&w, Component::Host, WarningCode::EscapedHost);
 }
 
@@ -259,7 +259,8 @@ fn tel_missing_phone_context() {
     assert_eq!(
         parsed
             .value
-            .number(),
+            .number()
+            .unwrap(),
         "911"
     );
     only(
@@ -389,4 +390,112 @@ fn standalone_host() {
 fn display_names_component_and_position() {
     let (_, w) = sip("sip:a b@example.com");
     assert_eq!(w[0].to_string(), "user: invalid character at byte 5");
+}
+
+#[test]
+fn unreadable_components_become_absent() {
+    for (input, component, code) in [
+        ("sip:[::1", Component::Host, WarningCode::InvalidIpv6),
+        ("sip:[zz::1]", Component::Host, WarningCode::InvalidIpv6),
+        (
+            "sip:[198.51.100.1]",
+            Component::Host,
+            WarningCode::InvalidIpv6,
+        ),
+        ("sip:", Component::Host, WarningCode::MissingHost),
+        ("sip::5060", Component::Host, WarningCode::MissingHost),
+        ("sip:host:99999", Component::Port, WarningCode::InvalidPort),
+        ("sip:[::1]x", Component::Host, WarningCode::TrailingContent),
+        ("sip:h;a=b c", Component::Param, WarningCode::InvalidChar),
+        (
+            "sip:u;a b@h",
+            Component::UserParam,
+            WarningCode::InvalidChar,
+        ),
+        (
+            "sip:my_host.example.com",
+            Component::Host,
+            WarningCode::InvalidChar,
+        ),
+        ("sip:h?foo", Component::Header, WarningCode::MissingValue),
+        ("sip:h?=v", Component::Header, WarningCode::EmptyName),
+        ("sip:;cpc=x@h", Component::User, WarningCode::EmptyUser),
+        ("sip:@h", Component::User, WarningCode::EmptyUserinfo),
+    ] {
+        let (_, w) = sip(input);
+        assert!(
+            w.iter()
+                .any(|w| w.component == component && w.code == code),
+            "{input}: expected {component:?} {code:?} in {w:?}"
+        );
+    }
+}
+
+#[test]
+fn unreadable_tel_and_urn_components() {
+    let parsed = TelUri::parse_with_warnings("tel:+1 555 123 4567").unwrap();
+    assert_eq!(
+        parsed
+            .value
+            .number(),
+        Some("+1 555 123 4567")
+    );
+    only(
+        &parsed.warnings,
+        Component::Number,
+        WarningCode::InvalidChar,
+    );
+
+    let parsed = UrnUri::parse_with_warnings("urn:foo").unwrap();
+    assert_eq!(
+        parsed
+            .value
+            .nid(),
+        Some("foo")
+    );
+    assert_eq!(
+        parsed
+            .value
+            .nss(),
+        None
+    );
+    only(&parsed.warnings, Component::Nss, WarningCode::MissingNss);
+
+    let parsed = UrnUri::parse_with_warnings("urn::sos").unwrap();
+    assert_eq!(
+        parsed
+            .value
+            .nid(),
+        None
+    );
+    assert_eq!(
+        parsed
+            .value
+            .to_string(),
+        "urn::sos"
+    );
+    only(&parsed.warnings, Component::Nid, WarningCode::MissingNid);
+}
+
+#[test]
+fn missing_scheme_keeps_user_and_host() {
+    let (uri, w) = sip("alice@example.com:5060");
+    assert_eq!(uri.scheme(), None);
+    assert_eq!(uri.user(), Some("alice"));
+    assert_eq!(uri.host(), Some(&Host::Hostname("example.com".into())));
+    assert_eq!(uri.port(), Some(5060));
+    only(&w, Component::Scheme, WarningCode::MissingScheme);
+
+    let parsed = Uri::parse_with_warnings("alice@example.com").unwrap();
+    assert_eq!(
+        parsed
+            .value
+            .as_other(),
+        Some("alice@example.com")
+    );
+    only(
+        &parsed.warnings,
+        Component::Scheme,
+        WarningCode::MissingScheme,
+    );
 }

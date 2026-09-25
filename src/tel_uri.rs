@@ -3,17 +3,19 @@ use std::str::FromStr;
 
 use crate::error::ParseTelUriError;
 use crate::params;
+use crate::parse::{self, SchemeSplit};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// tel: URI per RFC 3966.
 ///
 /// Represents a telephone number with optional parameters.
 /// Global numbers start with `+`. A local number without the `phone-context`
-/// parameter RFC 3966 requires is accepted with a warning.
+/// parameter RFC 3966 requires is accepted with a warning, and a missing
+/// number is `None`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct TelUri {
-    number: String,
+    number: Option<String>,
     params: Vec<(String, Option<String>)>,
     fragment: Option<String>,
 }
@@ -24,7 +26,7 @@ impl TelUri {
     /// The number should include `+` prefix for global numbers.
     pub fn new(number: impl Into<String>) -> Self {
         TelUri {
-            number: number.into(),
+            number: Some(number.into()),
             params: Vec::new(),
             fragment: None,
         }
@@ -37,15 +39,18 @@ impl TelUri {
         self
     }
 
-    /// The telephone number (including `+` for global numbers, including visual separators).
-    pub fn number(&self) -> &str {
-        &self.number
+    /// The telephone number (including `+` for global numbers, including
+    /// visual separators), `None` when the input had none.
+    pub fn number(&self) -> Option<&str> {
+        self.number
+            .as_deref()
     }
 
     /// Whether this is a global number (starts with `+`).
     pub fn is_global(&self) -> bool {
         self.number
-            .starts_with('+')
+            .as_deref()
+            .is_some_and(|n| n.starts_with('+'))
     }
 
     /// Parameters.
@@ -93,38 +98,36 @@ impl FromStr for TelUri {
 impl TelUri {
     /// Parse, reporting accepted grammar breaches beside the value.
     ///
-    /// Accepts exactly what [`FromStr`] accepts.
+    /// Accepts exactly what [`FromStr`] accepts: everything except empty
+    /// input and a scheme other than `tel`.
     pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseTelUriError> {
-        let mut warnings = Warnings::new(input);
-        let uri = Self::parse_into(input, &mut warnings)?;
-        Ok(warnings.finish(uri))
-    }
-
-    fn parse_into(input: &str, warnings: &mut Warnings) -> Result<Self, ParseTelUriError> {
         let err = |msg: &str| ParseTelUriError(msg.to_string());
-
-        let rest = input
-            .split_once(':')
-            .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("tel"))
-            .map(|(_, rest)| rest)
-            .ok_or_else(|| err("missing 'tel:' scheme"))?;
-
-        if rest.is_empty() {
-            return Err(err("empty telephone number"));
+        if input.is_empty() {
+            return Err(err("empty input"));
         }
+        let mut warnings = Warnings::new(input);
 
-        // Split number from params at first `;`
-        let (number_str, params_str) = if let Some(semi) = rest.find(';') {
-            (&rest[..semi], Some(&rest[semi + 1..]))
-        } else {
-            (rest, None)
+        let rest = match parse::split_scheme(input) {
+            SchemeSplit::Named(s, rest) if s.eq_ignore_ascii_case("tel") => rest,
+            SchemeSplit::Named(..) => return Err(err("scheme is not tel")),
+            SchemeSplit::Invalid => {
+                warnings.push(Component::Scheme, WarningCode::InvalidScheme, input, 0);
+                input
+            }
+            SchemeSplit::Absent => {
+                warnings.push(Component::Scheme, WarningCode::MissingScheme, input, 0);
+                input
+            }
         };
 
-        // Strip fragment from the end of params (or number if no params).
-        // `#` is a valid phonedigit-hex so it can appear in the number itself;
-        // the fragment `#` only applies after the params section.
-        let (params_str, fragment) = if let Some(p) = params_str {
-            if let Some(hash_pos) = p.find('#') {
+        let (number_str, params_str) = match rest.split_once(';') {
+            Some((number, params)) => (number, Some(params)),
+            None => (rest, None),
+        };
+
+        // `#` is a phonedigit-hex, so a fragment can only follow the params.
+        let (params_str, fragment) = match params_str.map(|p| (p, p.find('#'))) {
+            Some((p, Some(hash_pos))) => {
                 let frag = &p[hash_pos + 1..];
                 let frag = if frag.is_empty() {
                     warnings.push(Component::Fragment, WarningCode::EmptyFragment, p, hash_pos);
@@ -139,85 +142,74 @@ impl TelUri {
                     Some(frag.to_string())
                 };
                 (Some(&p[..hash_pos]), frag)
-            } else {
-                (Some(p), None)
             }
-        } else {
-            // No params — no fragment possible (# in the number is a phonedigit)
-            (None, None)
+            Some((p, None)) => (Some(p), None),
+            None => (None, None),
         };
 
-        // Validate number
-        if number_str.is_empty() {
-            return Err(err("empty telephone number"));
-        }
-
-        let number_bytes = number_str.as_bytes();
-
-        if number_bytes[0] == b'+' {
-            // Global number: + followed by phonedigits with at least one DIGIT
-            if number_bytes.len() < 2 {
-                return Err(err("global number must have digits after '+'"));
-            }
-            let digits = &number_bytes[1..];
-            if !digits
-                .iter()
-                .all(|&b| is_phonedigit(b))
-            {
-                return Err(err("invalid character in global number"));
-            }
-            if !digits
-                .iter()
-                .any(|b| b.is_ascii_digit())
-            {
-                return Err(err("global number must contain at least one digit"));
-            }
-        } else {
-            // Local number: phonedigit-hex chars, must contain at least one
-            // HEXDIG or * or #
-            if !number_bytes
-                .iter()
-                .all(|&b| is_phonedigit_hex(b))
-            {
-                return Err(err("invalid character in local number"));
-            }
-            if !number_bytes
-                .iter()
-                .any(|&b| b.is_ascii_hexdigit() || matches!(b, b'*' | b'#'))
-            {
-                return Err(err(
-                    "local number must contain at least one hex digit, *, or #",
-                ));
-            }
-        }
-
-        let params = if let Some(p) = params_str {
-            params::parse_params(p, &params::TEL_PARAMS, warnings)
-                .map_err(|e| err(&format!("param: {e}")))?
-        } else {
-            Vec::new()
+        let params = match params_str {
+            Some(p) => params::parse_params(p, &params::TEL_PARAMS, &mut warnings),
+            None => Vec::new(),
         };
 
-        if number_bytes[0] != b'+' && params::find_param(&params, "phone-context").is_none() {
-            warnings.push(
-                Component::Number,
-                WarningCode::MissingPhoneContext,
-                number_str,
-                0,
-            );
-        }
+        let number = if number_str.is_empty() {
+            warnings.push(Component::Number, WarningCode::MissingNumber, number_str, 0);
+            None
+        } else {
+            warn_number(number_str, &params, &mut warnings);
+            Some(number_str.to_string())
+        };
 
-        Ok(TelUri {
-            number: number_str.to_string(),
+        Ok(warnings.finish(TelUri {
+            number,
             params,
             fragment,
-        })
+        }))
+    }
+}
+
+/// RFC 3966: a local number needs a HEXDIG, `*` or `#`.
+fn is_local_digit(b: u8) -> bool {
+    b.is_ascii_hexdigit() || matches!(b, b'*' | b'#')
+}
+
+fn warn_number(number: &str, params: &[(String, Option<String>)], warnings: &mut Warnings) {
+    let global = number.strip_prefix('+');
+    let digits = global.unwrap_or(number);
+    type ByteClass = fn(u8) -> bool;
+    let (allowed, is_digit): (ByteClass, ByteClass) = if global.is_some() {
+        (is_phonedigit, |b| b.is_ascii_digit())
+    } else {
+        (is_phonedigit_hex, is_local_digit)
+    };
+    if let Some(pos) = digits
+        .bytes()
+        .position(|b| !allowed(b))
+    {
+        warnings.push(Component::Number, WarningCode::InvalidChar, digits, pos);
+    }
+    if !digits
+        .bytes()
+        .any(is_digit)
+    {
+        warnings.push(Component::Number, WarningCode::NoDigits, number, 0);
+    }
+    if !number.starts_with('+') && params::find_param(params, "phone-context").is_none() {
+        warnings.push(
+            Component::Number,
+            WarningCode::MissingPhoneContext,
+            number,
+            0,
+        );
     }
 }
 
 impl fmt::Display for TelUri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "tel:{}", self.number)?;
+        write!(f, "tel:")?;
+        if let Some(ref number) = self.number {
+            write!(f, "{number}")?;
+        }
         params::format_params(&self.params, f)?;
         if let Some(ref frag) = self.fragment {
             write!(f, "#{frag}")?;
@@ -235,7 +227,7 @@ mod tests {
         let uri: TelUri = "tel:+12345678"
             .parse()
             .unwrap();
-        assert_eq!(uri.number(), "+12345678");
+        assert_eq!(uri.number(), Some("+12345678"));
         assert!(uri.is_global());
         assert!(uri
             .params()
@@ -247,7 +239,7 @@ mod tests {
         let uri: TelUri = "tel:+12345678;param=1;param=2"
             .parse()
             .unwrap();
-        assert_eq!(uri.number(), "+12345678");
+        assert_eq!(uri.number(), Some("+12345678"));
         assert_eq!(
             uri.params()
                 .len(),
@@ -260,7 +252,7 @@ mod tests {
         let uri: TelUri = "tel:911"
             .parse()
             .unwrap();
-        assert_eq!(uri.number(), "911");
+        assert_eq!(uri.number(), Some("911"));
         assert!(!uri.is_global());
     }
 
@@ -269,7 +261,7 @@ mod tests {
         let uri: TelUri = "tel:1411;phone-context=example.com"
             .parse()
             .unwrap();
-        assert_eq!(uri.number(), "1411");
+        assert_eq!(uri.number(), Some("1411"));
         assert_eq!(
             uri.param("phone-context"),
             Some(&Some("example.com".into()))
@@ -281,7 +273,7 @@ mod tests {
         let uri: TelUri = "tel:+1.245.623-57"
             .parse()
             .unwrap();
-        assert_eq!(uri.number(), "+1.245.623-57");
+        assert_eq!(uri.number(), Some("+1.245.623-57"));
     }
 
     #[test]
@@ -289,7 +281,7 @@ mod tests {
         let uri: TelUri = "tel:*67"
             .parse()
             .unwrap();
-        assert_eq!(uri.number(), "*67");
+        assert_eq!(uri.number(), Some("*67"));
     }
 
     #[test]
@@ -302,15 +294,32 @@ mod tests {
     }
 
     #[test]
-    fn empty_number_fails() {
-        assert!("tel:"
-            .parse::<TelUri>()
-            .is_err());
+    fn empty_number_is_none() {
+        let parsed = TelUri::parse_with_warnings("tel:").unwrap();
+        assert_eq!(
+            parsed
+                .value
+                .number(),
+            None
+        );
+        assert_eq!(parsed.warnings[0].code, WarningCode::MissingNumber);
     }
 
     #[test]
-    fn plus_only_fails() {
-        assert!("tel:+"
+    fn plus_only_has_no_digits() {
+        let parsed = TelUri::parse_with_warnings("tel:+").unwrap();
+        assert_eq!(
+            parsed
+                .value
+                .number(),
+            Some("+")
+        );
+        assert_eq!(parsed.warnings[0].code, WarningCode::NoDigits);
+    }
+
+    #[test]
+    fn empty_input_fails() {
+        assert!(""
             .parse::<TelUri>()
             .is_err());
     }

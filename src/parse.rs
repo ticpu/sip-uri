@@ -252,6 +252,60 @@ pub fn encode_uri_header(s: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
+/// How an input starts, before any type-specific parsing.
+pub(crate) enum SchemeSplit<'a> {
+    /// A scheme and the text after its `:`.
+    Named(&'a str, &'a str),
+    /// A `:` whose prefix is not RFC 3986 scheme syntax, e.g. `<sip:…>`.
+    Invalid,
+    /// No `:`, or `host:port` with the scheme left out.
+    Absent,
+}
+
+/// Schemes this crate parses; always read as schemes, even before digits.
+const KNOWN_SCHEMES: [&str; 4] = ["sip", "sips", "tel", "urn"];
+
+pub(crate) fn split_scheme(input: &str) -> SchemeSplit<'_> {
+    let Some((scheme, rest)) = input.split_once(':') else {
+        return SchemeSplit::Absent;
+    };
+    if KNOWN_SCHEMES
+        .iter()
+        .any(|k| scheme.eq_ignore_ascii_case(k))
+    {
+        return SchemeSplit::Named(scheme, rest);
+    }
+    if !is_rfc3986_scheme(scheme) {
+        // `user@host:port` and `[v6]:port` reach their first `:` inside the authority.
+        if scheme.contains('@') || scheme.starts_with('[') {
+            return SchemeSplit::Absent;
+        }
+        return SchemeSplit::Invalid;
+    }
+    // `example.com:5060` is a host and port with no scheme, not scheme `example.com`.
+    let port = rest
+        .split([';', '?', '#', '/', '>'])
+        .next()
+        .unwrap_or_default();
+    if !port.is_empty()
+        && port
+            .bytes()
+            .all(|b| b.is_ascii_digit())
+    {
+        return SchemeSplit::Absent;
+    }
+    SchemeSplit::Named(scheme, rest)
+}
+
+/// RFC 3986 §3.1: `scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`
+pub(crate) fn is_rfc3986_scheme(s: &str) -> bool {
+    let mut bytes = s.bytes();
+    bytes
+        .next()
+        .is_some_and(|b| b.is_ascii_alphabetic())
+        && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'))
+}
+
 /// Find the `@` delimiter that separates userinfo from hostport in a SIP URI.
 ///
 /// Uses the sofia-sip two-phase algorithm (url.c:616-626): scan to the first

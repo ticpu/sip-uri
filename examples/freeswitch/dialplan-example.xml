@@ -1,5 +1,5 @@
-<!-- Worked example: parse an inbound URI header once, refuse to route on a
-     parse failure, then branch on what came back. The bridges are
+<!-- Worked example: parse an inbound URI header once, refuse to route without
+     a usable SIP host, then branch on what came back. The bridges are
      illustrative; the parse, the guard and the branch are the parts to copy. -->
 
 <!-- Belongs in vars.xml. FreeSWITCH substitutes $${fs_sip_uri} at XML parse
@@ -22,15 +22,13 @@
                 data="^^|${spawn_stream($${fs_sip_uri} vars uri_ ${sip_h_X-Caller-Id-Number})}"/>
       </condition>
 
-      <!-- The error contract, applied. An unparsable URI and a failed binary
-           both emit nothing, so uri_type is unset in either case; fs-sip-uri
-           has already logged a WARNING naming the command and the reason.
-           Refuse the call here rather than routing on components we do not
-           have -- an empty ${uri_user} would otherwise dial ${uri_host} alone
-           and reach the wrong endpoint. -->
-      <condition field="${uri_type}" expression="^$" break="on-true">
-        <action application="log" data="ERR unparsable X-Caller-Id-Number: ${sip_h_X-Caller-Id-Number}"/>
-        <action application="hangup" data="NORMAL_UNSPECIFIED"/>
+      <!-- The error contract, applied. A failed run emits nothing, and a URI
+           that is not SIP or has no readable host lacks what routing needs;
+           refuse the call here rather than routing on components we do not
+           have. ${uri_warnings} names what was wrong. -->
+      <condition field="${uri_type}:${uri_host}" expression="^sip:.+$" break="on-false">
+        <anti-action application="log" data="ERR no usable SIP URI in X-Caller-Id-Number: ${uri_warnings}"/>
+        <anti-action application="hangup" data="NORMAL_UNSPECIFIED"/>
       </condition>
     </extension>
 
@@ -55,7 +53,7 @@
       <condition field="${destination_number}" expression="^tel_only$" break="on-false"/>
 
       <!-- Match the failure, not the success: anything that is not exactly
-           "tel", which includes the empty string a parse failure produces. -->
+           "tel", which includes the empty string a failed run produces. -->
       <condition field="${spawn_stream($${fs_sip_uri} get type ${sip_h_X-Caller-Id-Number})}"
                  expression="^(?!tel$).*$" break="on-true">
         <action application="log" data="ERR expected a tel: URI"/>

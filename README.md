@@ -11,16 +11,16 @@ use sip_uri::{SipUri, TelUri, UrnUri, Uri};
 
 let uri: SipUri = "sip:alice@example.com;transport=tcp".parse().unwrap();
 assert_eq!(uri.user(), Some("alice"));
-assert_eq!(uri.host().to_string(), "example.com");
+assert_eq!(uri.host().unwrap().to_string(), "example.com");
 assert_eq!(uri.param("transport"), Some(&Some("tcp".to_string())));
 
 let tel: TelUri = "tel:+15551234567;cpc=emergency".parse().unwrap();
-assert_eq!(tel.number(), "+15551234567");
+assert_eq!(tel.number(), Some("+15551234567"));
 assert!(tel.is_global());
 
 let urn: UrnUri = "urn:service:sos".parse().unwrap();
-assert_eq!(urn.nid(), "service");
-assert_eq!(urn.nss(), "sos");
+assert_eq!(urn.nid(), Some("service"));
+assert_eq!(urn.nss(), Some("sos"));
 ```
 
 ```toml
@@ -55,7 +55,7 @@ use sip_uri::{SipUri, Scheme};
 let uri: SipUri = "sips:+15551234567;cpc=emergency:secret@[2001:db8::1]:5061;user=phone?Subject=test"
     .parse().unwrap();
 
-assert_eq!(uri.scheme(), Scheme::Sips);
+assert_eq!(uri.scheme(), Some(Scheme::Sips));
 assert_eq!(uri.user(), Some("+15551234567"));
 assert_eq!(uri.user_params(), &[("cpc".into(), Some("emergency".into()))]);
 assert_eq!(uri.password(), Some("secret"));
@@ -123,7 +123,7 @@ Brackets are the `IPv6reference` production, so `[198.51.100.1]` is rejected.
 use sip_uri::TelUri;
 
 let uri: TelUri = "tel:+15551234567;cpc=emergency;oli=0".parse().unwrap();
-assert_eq!(uri.number(), "+15551234567");
+assert_eq!(uri.number(), Some("+15551234567"));
 assert!(uri.is_global());
 assert_eq!(uri.param("cpc"), Some(&Some("emergency".into())));
 
@@ -142,17 +142,17 @@ use sip_uri::UrnUri;
 
 // NG911 emergency service identifier
 let urn: UrnUri = "urn:service:sos.fire".parse().unwrap();
-assert_eq!(urn.nid(), "service");
-assert_eq!(urn.nss(), "sos.fire");
+assert_eq!(urn.nid(), Some("service"));
+assert_eq!(urn.nss(), Some("sos.fire"));
 
 // NENA call tracking identifier
 let urn: UrnUri = "urn:nena:callid:abc123:host.example.com".parse().unwrap();
-assert_eq!(urn.nid(), "nena");
-assert_eq!(urn.nss(), "callid:abc123:host.example.com");
+assert_eq!(urn.nid(), Some("nena"));
+assert_eq!(urn.nss(), Some("callid:abc123:host.example.com"));
 
 // 3GPP IMS service
 let urn: UrnUri = "urn:urn-7:3gpp-service.ims.icsi.mmtel".parse().unwrap();
-assert_eq!(urn.nid(), "urn-7");
+assert_eq!(urn.nid(), Some("urn-7"));
 
 // Optional RFC 8141 components (resolution, query, fragment)
 let urn: UrnUri = "urn:example:resource?+resolve?=query#section".parse().unwrap();
@@ -200,11 +200,14 @@ assert_eq!(decode_user("%2B15551234567").as_ref(), b"+15551234567");
 
 ## Warnings
 
-Parsing is best-effort: input that breaks the grammar but still has one
-reading is accepted, and `parse_with_warnings` reports each breach as a typed
-`ParseWarning` (component, code, byte position, whether the value survived).
-`FromStr` accepts exactly the same input and drops the warnings. Warnings never
-quote the input, since a user part is a caller number.
+Parsing is best-effort: whatever an input breaks in the grammar, the parser
+returns what it could read, and `parse_with_warnings` reports each breach as a
+typed `ParseWarning` (component, code, byte position, whether the value
+survived). A missing or unreadable scheme, host, port, number, NID or NSS is
+`None` with a warning. The only errors are empty input and a scheme that
+belongs to another type (`tel:` parsed as `SipUri`); `Uri` keeps anything else
+as `Other`. `FromStr` accepts exactly the same input and drops the warnings.
+Warnings never quote the input, since a user part is a caller number.
 
 ```rust
 use sip_uri::{Component, SipUri, WarningCode};

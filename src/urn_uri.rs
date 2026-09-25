@@ -2,7 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::error::ParseUrnError;
-use crate::parse::{percent_decode, validate_pct_encoded};
+use crate::parse::{self, percent_decode, SchemeSplit};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// URN (Uniform Resource Name) per RFC 8141.
@@ -13,11 +13,12 @@ use crate::warning::{Component, Parsed, WarningCode, Warnings};
 /// The NID is stored lowercase per RFC 8141 equivalence rules.
 /// The NSS is stored as-is; percent-encoded hex digits are uppercased for
 /// canonical comparison but the original octets are preserved (never decoded).
+/// A missing NID or NSS is `None`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct UrnUri {
-    nid: String,
-    nss: String,
+    nid: Option<String>,
+    nss: Option<String>,
     r_component: Option<String>,
     q_component: Option<String>,
     f_component: Option<String>,
@@ -30,10 +31,11 @@ impl UrnUri {
     /// use `FromStr` for validated parsing.
     pub fn new(nid: impl Into<String>, nss: impl Into<String>) -> Self {
         UrnUri {
-            nid: nid
-                .into()
-                .to_ascii_lowercase(),
-            nss: nss.into(),
+            nid: Some(
+                nid.into()
+                    .to_ascii_lowercase(),
+            ),
+            nss: Some(nss.into()),
             r_component: None,
             q_component: None,
             f_component: None,
@@ -59,13 +61,15 @@ impl UrnUri {
     }
 
     /// The Namespace Identifier (always lowercase).
-    pub fn nid(&self) -> &str {
-        &self.nid
+    pub fn nid(&self) -> Option<&str> {
+        self.nid
+            .as_deref()
     }
 
     /// The Namespace Specific String (as received, with hex uppercased).
-    pub fn nss(&self) -> &str {
-        &self.nss
+    pub fn nss(&self) -> Option<&str> {
+        self.nss
+            .as_deref()
     }
 
     /// The resolution component, if present.
@@ -88,36 +92,29 @@ impl UrnUri {
 
     /// The assigned-name portion (`urn:NID:NSS`) without optional components.
     pub fn assigned_name(&self) -> String {
-        format!("urn:{}:{}", self.nid, self.nss)
+        let mut s = String::from("urn:");
+        push_assigned(&mut s, self.nid(), self.nss());
+        s
+    }
+}
+
+fn push_assigned(out: &mut String, nid: Option<&str>, nss: Option<&str>) {
+    out.push_str(nid.unwrap_or_default());
+    if let Some(nss) = nss {
+        out.push(':');
+        out.push_str(nss);
     }
 }
 
 /// RFC 8141: `NID = (alphanum) 0*30(ldh) (alphanum)` where `ldh = alphanum / "-"`.
-/// Length 2-32, first and last char alphanumeric, interior alphanum or hyphen.
-fn validate_nid(nid: &str) -> Result<(), String> {
+fn is_valid_nid(nid: &str) -> bool {
     let bytes = nid.as_bytes();
-    let len = bytes.len();
-
-    if len < 2 {
-        return Err("NID must be at least 2 characters".into());
-    }
-    if len > 32 {
-        return Err("NID must be at most 32 characters".into());
-    }
-    if !bytes[0].is_ascii_alphanumeric() {
-        return Err("NID must start with alphanumeric character".into());
-    }
-    if !bytes[len - 1].is_ascii_alphanumeric() {
-        return Err("NID must end with alphanumeric character".into());
-    }
-    if let Some(pos) = bytes[1..len - 1]
-        .iter()
-        .position(|&b| !b.is_ascii_alphanumeric() && b != b'-')
-    {
-        return Err(format!("invalid character in NID at position {}", pos + 1));
-    }
-
-    Ok(())
+    (2..=32).contains(&bytes.len())
+        && bytes[0].is_ascii_alphanumeric()
+        && bytes[bytes.len() - 1].is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|&b| b.is_ascii_alphanumeric() || b == b'-')
 }
 
 /// RFC 3986 pchar: `unreserved / pct-encoded / sub-delims / ":" / "@"`
@@ -144,18 +141,6 @@ fn is_pchar(b: u8) -> bool {
         )
 }
 
-/// Validate NSS: `pchar *(pchar / "/")`, with percent-encoded sequences.
-fn validate_nss(nss: &str) -> Result<(), String> {
-    if nss.is_empty() {
-        return Err("NSS must not be empty".into());
-    }
-    if nss.starts_with('/') {
-        return Err("NSS must not start with '/'".into());
-    }
-    validate_pct_encoded(nss, |b| is_pchar(b) || b == b'/')
-        .map_err(|pos| format!("invalid character in NSS at position {pos}"))
-}
-
 impl FromStr for UrnUri {
     type Err = ParseUrnError;
 
@@ -167,62 +152,85 @@ impl FromStr for UrnUri {
 impl UrnUri {
     /// Parse, reporting accepted grammar breaches beside the value.
     ///
-    /// Accepts exactly what [`FromStr`] accepts.
+    /// Accepts exactly what [`FromStr`] accepts: everything except empty
+    /// input and a scheme other than `urn`.
     pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseUrnError> {
-        let mut warnings = Warnings::new(input);
-        let urn = Self::parse_into(input, &mut warnings)?;
-        Ok(warnings.finish(urn))
-    }
-
-    fn parse_into(input: &str, warnings: &mut Warnings) -> Result<Self, ParseUrnError> {
         let err = |msg: &str| ParseUrnError(msg.to_string());
+        if input.is_empty() {
+            return Err(err("empty input"));
+        }
+        let mut warnings = Warnings::new(input);
 
-        // Strip "urn:" scheme (case-insensitive)
-        let rest = {
-            let colon = input
-                .find(':')
-                .ok_or_else(|| err("missing scheme"))?;
-            if !input[..colon].eq_ignore_ascii_case("urn") {
-                return Err(err("scheme must be 'urn'"));
+        let rest = match parse::split_scheme(input) {
+            SchemeSplit::Named(s, rest) if s.eq_ignore_ascii_case("urn") => rest,
+            SchemeSplit::Named(..) => return Err(err("scheme is not urn")),
+            SchemeSplit::Invalid => {
+                warnings.push(Component::Scheme, WarningCode::InvalidScheme, input, 0);
+                input
             }
-            &input[colon + 1..]
+            SchemeSplit::Absent => {
+                warnings.push(Component::Scheme, WarningCode::MissingScheme, input, 0);
+                input
+            }
         };
 
-        // Extract NID (up to next ':')
-        let nid_end = rest
-            .find(':')
-            .ok_or_else(|| err("missing ':' after NID"))?;
-        let nid_str = &rest[..nid_end];
-        validate_nid(nid_str).map_err(|e| err(&e))?;
+        let (nid_str, after_nid) = match rest.split_once(':') {
+            Some((nid, after)) => (nid, Some(after)),
+            None => (rest, None),
+        };
+        let nid = if nid_str.is_empty() {
+            warnings.push(Component::Nid, WarningCode::MissingNid, nid_str, 0);
+            None
+        } else {
+            if !is_valid_nid(nid_str) {
+                warnings.push(Component::Nid, WarningCode::InvalidNid, nid_str, 0);
+            }
+            Some(nid_str.to_ascii_lowercase())
+        };
 
-        let after_nid = &rest[nid_end + 1..];
+        let after_nid = after_nid.unwrap_or_default();
 
         // `#` appears in no component, so the first one starts the fragment.
-        let (before_fragment, f_component) = if let Some((before, frag)) = after_nid.split_once('#')
-        {
-            warnings.charset(Component::FComponent, frag, is_rqf_char);
-            (before, Some(frag.to_string()))
-        } else {
-            (after_nid, None)
+        let (before_fragment, f_component) = match after_nid.split_once('#') {
+            Some((before, frag)) => {
+                warnings.charset(Component::FComponent, frag, is_rqf_char);
+                (before, Some(frag.to_string()))
+            }
+            None => (after_nid, None),
         };
 
-        // Find the end of NSS: first '?' that is part of rq-components.
-        // '?' is NOT a pchar, so the first '?' ends the NSS.
-        let (nss_str, rq_str) = if let Some(q) = before_fragment.find('?') {
-            (&before_fragment[..q], Some(&before_fragment[q..]))
-        } else {
-            (before_fragment, None)
+        // `?` is not a pchar: `?+` or `?=` ends the NSS, any other `?` stays in it.
+        let rq_start = before_fragment
+            .match_indices('?')
+            .map(|(i, _)| i)
+            .find(|&i| {
+                matches!(
+                    before_fragment
+                        .as_bytes()
+                        .get(i + 1),
+                    Some(b'+' | b'=')
+                )
+            });
+        let (nss_str, rq_str) = match rq_start {
+            Some(q) => (&before_fragment[..q], Some(&before_fragment[q..])),
+            None => (before_fragment, None),
         };
 
-        // Validate and canonize NSS
-        validate_nss(nss_str).map_err(|e| err(&e))?;
-        let nss = percent_decode(nss_str, |_| false);
-
-        // Parse rq-components: [ "?+" r-component ] [ "?=" q-component ]
-        let (r_component, q_component) = if let Some(rq) = rq_str {
-            parse_rq_components(rq).map_err(|e| err(&e))?
+        let nss = if nss_str.is_empty() {
+            warnings.push(Component::Nss, WarningCode::MissingNss, nss_str, 0);
+            None
         } else {
-            (None, None)
+            if nss_str.starts_with('/') {
+                warnings.push(Component::Nss, WarningCode::InvalidChar, nss_str, 0);
+            } else {
+                warnings.charset(Component::Nss, nss_str, |b| is_pchar(b) || b == b'/');
+            }
+            Some(percent_decode(nss_str, |_| false))
+        };
+
+        let (r_component, q_component) = match rq_str {
+            Some(rq) => parse_rq_components(rq),
+            None => (None, None),
         };
         for (component, value) in [
             (Component::RComponent, r_component),
@@ -236,13 +244,13 @@ impl UrnUri {
             }
         }
 
-        Ok(UrnUri {
-            nid: nid_str.to_ascii_lowercase(),
+        Ok(warnings.finish(UrnUri {
+            nid,
             nss,
             r_component: r_component.map(str::to_string),
             q_component: q_component.map(str::to_string),
             f_component,
-        })
+        }))
     }
 }
 
@@ -251,28 +259,23 @@ fn is_rqf_char(b: u8) -> bool {
     is_pchar(b) || matches!(b, b'/' | b'?')
 }
 
-/// Parse `?+r_component` and/or `?=q_component` from the rq portion.
-///
-/// Input starts with `?`. Per RFC 8141:
-/// - `?+` introduces the r-component
-/// - `?=` introduces the q-component
-/// - r-component comes before q-component if both present
-fn parse_rq_components(s: &str) -> Result<(Option<&str>, Option<&str>), String> {
+/// Split `?+r` and/or `?=q`; the input starts with one of the two.
+fn parse_rq_components(s: &str) -> (Option<&str>, Option<&str>) {
     if let Some(r) = s.strip_prefix("?+") {
-        Ok(match r.split_once("?=") {
+        match r.split_once("?=") {
             Some((r, q)) => (Some(r), Some(q)),
             None => (Some(r), None),
-        })
-    } else if let Some(q) = s.strip_prefix("?=") {
-        Ok((None, Some(q)))
+        }
     } else {
-        Err("'?' in URN not followed by '+' or '='".into())
+        (None, s.strip_prefix("?="))
     }
 }
 
 impl fmt::Display for UrnUri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "urn:{}:{}", self.nid, self.nss)?;
+        let mut assigned = String::from("urn:");
+        push_assigned(&mut assigned, self.nid(), self.nss());
+        f.write_str(&assigned)?;
         if let Some(ref r) = self.r_component {
             write!(f, "?+{r}")?;
         }
@@ -295,8 +298,8 @@ mod tests {
         let urn: UrnUri = "urn:service:sos"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "service");
-        assert_eq!(urn.nss(), "sos");
+        assert_eq!(urn.nid(), Some("service"));
+        assert_eq!(urn.nss(), Some("sos"));
     }
 
     #[test]
@@ -304,8 +307,8 @@ mod tests {
         let urn: UrnUri = "urn:service:sos.fire"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "service");
-        assert_eq!(urn.nss(), "sos.fire");
+        assert_eq!(urn.nid(), Some("service"));
+        assert_eq!(urn.nss(), Some("sos.fire"));
     }
 
     #[test]
@@ -313,8 +316,8 @@ mod tests {
         let urn: UrnUri = "urn:nena:service:sos"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "nena");
-        assert_eq!(urn.nss(), "service:sos");
+        assert_eq!(urn.nid(), Some("nena"));
+        assert_eq!(urn.nss(), Some("service:sos"));
     }
 
     #[test]
@@ -322,9 +325,10 @@ mod tests {
         let urn: UrnUri = "urn:nena:callid:20250101120000001TEST001:bcf1.ng911.example.com"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "nena");
+        assert_eq!(urn.nid(), Some("nena"));
         assert_eq!(
-            urn.nss(),
+            urn.nss()
+                .unwrap(),
             "callid:20250101120000001TEST001:bcf1.ng911.example.com"
         );
     }
@@ -335,9 +339,10 @@ mod tests {
             "urn:emergency:incidentid:f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6:bcf.ng911.example.com"
                 .parse()
                 .unwrap();
-        assert_eq!(urn.nid(), "emergency");
+        assert_eq!(urn.nid(), Some("emergency"));
         assert!(urn
             .nss()
+            .unwrap()
             .starts_with("incidentid:"));
     }
 
@@ -346,8 +351,8 @@ mod tests {
         let urn: UrnUri = "urn:gsma:imei:35625207-210812-0"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "gsma");
-        assert_eq!(urn.nss(), "imei:35625207-210812-0");
+        assert_eq!(urn.nid(), Some("gsma"));
+        assert_eq!(urn.nss(), Some("imei:35625207-210812-0"));
     }
 
     #[test]
@@ -355,8 +360,8 @@ mod tests {
         let urn: UrnUri = "urn:urn-7:3gpp-service.ims.icsi.mmtel"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "urn-7");
-        assert_eq!(urn.nss(), "3gpp-service.ims.icsi.mmtel");
+        assert_eq!(urn.nid(), Some("urn-7"));
+        assert_eq!(urn.nss(), Some("3gpp-service.ims.icsi.mmtel"));
     }
 
     #[test]
@@ -364,8 +369,8 @@ mod tests {
         let urn: UrnUri = "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "uuid");
-        assert_eq!(urn.nss(), "f81d4fae-7dec-11d0-a765-00a0c91e6bf6");
+        assert_eq!(urn.nid(), Some("uuid"));
+        assert_eq!(urn.nss(), Some("f81d4fae-7dec-11d0-a765-00a0c91e6bf6"));
     }
 
     #[test]
@@ -373,7 +378,7 @@ mod tests {
         let urn: UrnUri = "URN:service:sos"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "service");
+        assert_eq!(urn.nid(), Some("service"));
     }
 
     #[test]
@@ -381,7 +386,7 @@ mod tests {
         let urn: UrnUri = "urn:SERVICE:sos"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "service");
+        assert_eq!(urn.nid(), Some("service"));
     }
 
     #[test]
@@ -389,7 +394,7 @@ mod tests {
         let urn: UrnUri = "urn:example:foo%2fbar"
             .parse()
             .unwrap();
-        assert_eq!(urn.nss(), "foo%2Fbar");
+        assert_eq!(urn.nss(), Some("foo%2Fbar"));
     }
 
     #[test]
@@ -415,7 +420,7 @@ mod tests {
         let urn: UrnUri = "urn:example:foo?+resolve?=query#frag"
             .parse()
             .unwrap();
-        assert_eq!(urn.nss(), "foo");
+        assert_eq!(urn.nss(), Some("foo"));
         assert_eq!(urn.r_component(), Some("resolve"));
         assert_eq!(urn.q_component(), Some("query"));
         assert_eq!(urn.f_component(), Some("frag"));
@@ -463,7 +468,7 @@ mod tests {
         let urn: UrnUri = "urn:example:a/b/c"
             .parse()
             .unwrap();
-        assert_eq!(urn.nss(), "a/b/c");
+        assert_eq!(urn.nss(), Some("a/b/c"));
     }
 
     #[test]
@@ -471,7 +476,7 @@ mod tests {
         let urn: UrnUri = "urn:example:a:b:c"
             .parse()
             .unwrap();
-        assert_eq!(urn.nss(), "a:b:c");
+        assert_eq!(urn.nss(), Some("a:b:c"));
     }
 
     #[test]
@@ -509,53 +514,37 @@ mod tests {
     }
 
     #[test]
-    fn nid_too_short() {
-        assert!("urn:x:foo"
-            .parse::<UrnUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn nid_too_long() {
-        let long_nid = "a".repeat(33);
-        assert!(format!("urn:{long_nid}:foo")
-            .parse::<UrnUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn nid_starts_with_hyphen() {
-        assert!("urn:-ab:foo"
-            .parse::<UrnUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn nid_ends_with_hyphen() {
-        assert!("urn:ab-:foo"
-            .parse::<UrnUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn empty_nss() {
-        assert!("urn:example:"
-            .parse::<UrnUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn nss_starts_with_slash() {
-        assert!("urn:example:/foo"
-            .parse::<UrnUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn invalid_rq_delimiter() {
-        assert!("urn:example:foo?x"
-            .parse::<UrnUri>()
-            .is_err());
+    fn nonconformant_nid_and_nss_warn() {
+        let long_nid = format!("urn:{}:foo", "a".repeat(33));
+        for (input, code) in [
+            ("urn:x:foo", WarningCode::InvalidNid),
+            (long_nid.as_str(), WarningCode::InvalidNid),
+            ("urn:-ab:foo", WarningCode::InvalidNid),
+            ("urn:ab-:foo", WarningCode::InvalidNid),
+            ("urn:example:", WarningCode::MissingNss),
+            ("urn:example:/foo", WarningCode::InvalidChar),
+            ("urn:example:foo?x", WarningCode::InvalidChar),
+        ] {
+            let parsed = UrnUri::parse_with_warnings(input).unwrap();
+            assert_eq!(
+                parsed
+                    .warnings
+                    .iter()
+                    .map(|w| w.code)
+                    .collect::<Vec<_>>(),
+                [code],
+                "{input}"
+            );
+            assert_eq!(
+                parsed
+                    .value
+                    .to_string()
+                    .parse::<UrnUri>()
+                    .unwrap(),
+                parsed.value,
+                "{input}"
+            );
+        }
     }
 
     #[test]
@@ -565,8 +554,8 @@ mod tests {
         let urn: UrnUri = "urn:service:sos:5060"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "service");
-        assert_eq!(urn.nss(), "sos:5060");
+        assert_eq!(urn.nid(), Some("service"));
+        assert_eq!(urn.nss(), Some("sos:5060"));
     }
 
     #[test]
@@ -574,8 +563,8 @@ mod tests {
         let urn: UrnUri = "urn:example:ng911:lsp:provider1"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "example");
-        assert_eq!(urn.nss(), "ng911:lsp:provider1");
+        assert_eq!(urn.nid(), Some("example"));
+        assert_eq!(urn.nss(), Some("ng911:lsp:provider1"));
     }
 
     #[test]
@@ -583,7 +572,7 @@ mod tests {
         let urn: UrnUri = "urn:nena:service:responder.police"
             .parse()
             .unwrap();
-        assert_eq!(urn.nid(), "nena");
-        assert_eq!(urn.nss(), "service:responder.police");
+        assert_eq!(urn.nid(), Some("nena"));
+        assert_eq!(urn.nss(), Some("service:responder.police"));
     }
 }

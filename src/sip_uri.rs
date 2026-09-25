@@ -4,28 +4,29 @@ use std::str::FromStr;
 use crate::error::ParseSipUriError;
 use crate::host::Host;
 use crate::params;
-use crate::parse;
+use crate::parse::{self, SchemeSplit};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 type Params = Vec<(String, Option<String>)>;
 type Headers = Vec<(String, String)>;
 
-type UserinfoResult = Result<(Option<String>, Params, Option<String>), ParseSipUriError>;
-type HostportResult =
-    Result<(Host, Option<u16>, Params, Headers, Option<String>), ParseSipUriError>;
+type Userinfo = (Option<String>, Params, Option<String>);
+type Hostport = (Option<Host>, Option<u16>, Params, Headers, Option<String>);
 
 /// SIP or SIPS URI per RFC 3261 §19.
 ///
 /// Supports the full grammar including user-params (`;` within userinfo),
-/// password, IPv6 hosts, URI parameters, and headers.
+/// password, IPv6 hosts, URI parameters, and headers. A scheme or host that
+/// is missing or unreadable is `None`, reported by
+/// [`SipUri::parse_with_warnings`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct SipUri {
-    scheme: Scheme,
+    scheme: Option<Scheme>,
     user: Option<String>,
     user_params: Vec<(String, Option<String>)>,
     password: Option<String>,
-    host: Host,
+    host: Option<Host>,
     port: Option<u16>,
     params: Vec<(String, Option<String>)>,
     headers: Vec<(String, String)>,
@@ -62,11 +63,11 @@ impl SipUri {
     /// Create a new SIP URI with the given host and `sip:` scheme.
     pub fn new(host: Host) -> Self {
         SipUri {
-            scheme: Scheme::Sip,
+            scheme: Some(Scheme::Sip),
             user: None,
             user_params: Vec::new(),
             password: None,
-            host,
+            host: Some(host),
             port: None,
             params: Vec::new(),
             headers: Vec::new(),
@@ -76,7 +77,7 @@ impl SipUri {
 
     /// Set the URI scheme.
     pub fn with_scheme(mut self, scheme: Scheme) -> Self {
-        self.scheme = scheme;
+        self.scheme = Some(scheme);
         self
     }
 
@@ -125,8 +126,8 @@ impl SipUri {
         self
     }
 
-    /// The URI scheme (`sip` or `sips`).
-    pub fn scheme(&self) -> Scheme {
+    /// The URI scheme (`sip` or `sips`), `None` when the input had none.
+    pub fn scheme(&self) -> Option<Scheme> {
         self.scheme
     }
 
@@ -149,9 +150,10 @@ impl SipUri {
             .as_deref()
     }
 
-    /// The host component.
-    pub fn host(&self) -> &Host {
-        &self.host
+    /// The host, `None` when missing or unreadable.
+    pub fn host(&self) -> Option<&Host> {
+        self.host
+            .as_ref()
     }
 
     /// The explicit port, if specified.
@@ -197,18 +199,16 @@ impl SipUri {
         self
     }
 
-    /// Convenience: `user@host:port` or `host:port` string.
+    /// Convenience: `user@host:port`, with each absent part left out.
     pub fn user_host(&self) -> String {
         let mut s = String::new();
         if let Some(ref u) = self.user {
             s.push_str(u);
             s.push('@');
         }
-        s.push_str(
-            &self
-                .host
-                .to_string(),
-        );
+        if let Some(ref host) = self.host {
+            s.push_str(&host.to_string());
+        }
         if let Some(p) = self.port {
             s.push(':');
             s.push_str(&p.to_string());
@@ -228,7 +228,8 @@ impl FromStr for SipUri {
 impl SipUri {
     /// Parse, reporting accepted grammar breaches beside the value.
     ///
-    /// Accepts exactly what [`FromStr`] accepts.
+    /// Accepts exactly what [`FromStr`] accepts: everything except empty
+    /// input and a scheme other than `sip`/`sips`.
     ///
     /// ```
     /// use sip_uri::{SipUri, WarningCode};
@@ -238,51 +239,51 @@ impl SipUri {
     /// assert_eq!(parsed.warnings[0].code, WarningCode::SignedPort);
     /// ```
     pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseSipUriError> {
-        let mut warnings = Warnings::new(input);
-        let uri = Self::parse_into(input, &mut warnings)?;
-        Ok(warnings.finish(uri))
-    }
-
-    fn parse_into(input: &str, warnings: &mut Warnings) -> Result<Self, ParseSipUriError> {
         let err = |msg: &str| ParseSipUriError(msg.to_string());
+        if input.is_empty() {
+            return Err(err("empty input"));
+        }
+        let mut warnings = Warnings::new(input);
 
-        // 1. Scheme detection
-        let colon_pos = input
-            .find(':')
-            .ok_or_else(|| err("missing scheme"))?;
-        let scheme_str = &input[..colon_pos];
-        let scheme = if scheme_str.eq_ignore_ascii_case("sip") {
-            Scheme::Sip
-        } else if scheme_str.eq_ignore_ascii_case("sips") {
-            Scheme::Sips
-        } else {
-            return Err(err("scheme is not sip or sips"));
+        let (scheme, rest) = match parse::split_scheme(input) {
+            SchemeSplit::Named(s, rest) if s.eq_ignore_ascii_case("sip") => {
+                (Some(Scheme::Sip), rest)
+            }
+            SchemeSplit::Named(s, rest) if s.eq_ignore_ascii_case("sips") => {
+                (Some(Scheme::Sips), rest)
+            }
+            SchemeSplit::Named(..) => return Err(err("scheme is not sip or sips")),
+            SchemeSplit::Invalid => {
+                warnings.push(Component::Scheme, WarningCode::InvalidScheme, input, 0);
+                (None, input)
+            }
+            SchemeSplit::Absent => {
+                warnings.push(Component::Scheme, WarningCode::MissingScheme, input, 0);
+                (None, input)
+            }
         };
 
-        let rest = &input[colon_pos + 1..];
+        let (userinfo, hostport_rest) = split_userinfo_host(rest, &mut warnings);
 
-        let (userinfo, hostport_rest) = split_userinfo_host(rest)?;
-
-        let (user, user_params, password) = if let Some(uinfo) = userinfo {
-            parse_userinfo(uinfo, warnings)?
-        } else {
-            (None, Vec::new(), None)
+        let (user, user_params, password) = match userinfo {
+            Some(uinfo) => parse_userinfo(uinfo, &mut warnings),
+            None => (None, Vec::new(), None),
         };
 
-        let (host, port, uri_params, headers, fragment) =
-            parse_hostport_params_headers(hostport_rest, warnings)?;
+        let (host, port, params, headers, fragment) =
+            parse_hostport_params_headers(hostport_rest, &mut warnings);
 
-        Ok(SipUri {
+        Ok(warnings.finish(SipUri {
             scheme,
             user,
             user_params,
             password,
             host,
             port,
-            params: uri_params,
+            params,
             headers,
             fragment,
-        })
+        }))
     }
 }
 
@@ -290,31 +291,21 @@ impl SipUri {
 ///
 /// Uses the sofia-sip algorithm: scan for `@` looking past `/;?#` which are
 /// allowed unescaped in the SIP user part.
-fn split_userinfo_host(s: &str) -> Result<(Option<&str>, &str), ParseSipUriError> {
-    let err = |msg: &str| ParseSipUriError(msg.to_string());
-
-    if let Some(at_pos) = parse::find_userinfo_at(s) {
-        if at_pos == 0 {
-            return Err(err("empty userinfo before @"));
+fn split_userinfo_host<'a>(s: &'a str, warnings: &mut Warnings) -> (Option<&'a str>, &'a str) {
+    match parse::find_userinfo_at(s) {
+        Some(0) => {
+            warnings.push(Component::User, WarningCode::EmptyUserinfo, s, 0);
+            (None, &s[1..])
         }
-        let userinfo = &s[..at_pos];
-        let rest = &s[at_pos + 1..];
-        if rest.is_empty() {
-            return Err(err("missing host after @"));
-        }
-        Ok((Some(userinfo), rest))
-    } else {
-        // No @, the whole thing is hostport+params+headers
-        Ok((None, s))
+        Some(at_pos) => (Some(&s[..at_pos]), &s[at_pos + 1..]),
+        None => (None, s),
     }
 }
 
 /// Parse the userinfo portion into (user, user_params, password).
 ///
 /// Userinfo structure: `user [*(";" user-param)] [":" password]`
-fn parse_userinfo(s: &str, warnings: &mut Warnings) -> UserinfoResult {
-    let err = |msg: &str| ParseSipUriError(msg.to_string());
-
+fn parse_userinfo(s: &str, warnings: &mut Warnings) -> Userinfo {
     // `:` is not user-unreserved, so the first one starts the password.
     let (user_and_params, password) = if let Some(colon_pos) = s.find(':') {
         let pwd = &s[colon_pos + 1..];
@@ -330,11 +321,11 @@ fn parse_userinfo(s: &str, warnings: &mut Warnings) -> UserinfoResult {
     };
 
     if user_part.is_empty() {
-        if params_str.is_some() {
-            return Err(err("empty user before ';'"));
+        if params_str.is_none() {
+            warnings.push(Component::User, WarningCode::PasswordWithoutUser, s, 0);
+            return (None, Vec::new(), password);
         }
-        warnings.push(Component::User, WarningCode::PasswordWithoutUser, s, 0);
-        return Ok((None, Vec::new(), password));
+        warnings.push(Component::User, WarningCode::EmptyUser, s, 0);
     }
 
     warnings.charset(Component::User, user_part, parse::is_user_char);
@@ -348,19 +339,16 @@ fn parse_userinfo(s: &str, warnings: &mut Warnings) -> UserinfoResult {
     }
 
     let user_params = match params_str {
-        Some(p) => params::parse_params(p, &params::USER_PARAMS, warnings)
-            .map_err(|e| err(&format!("user param: {e}")))?,
+        Some(p) => params::parse_params(p, &params::USER_PARAMS, warnings),
         None => Vec::new(),
     };
 
-    Ok((Some(parse::canonize_user(user_part)), user_params, password))
+    (Some(parse::canonize_user(user_part)), user_params, password)
 }
 
 /// Parse host, optional port, URI params, and headers from the portion after `@` (or after scheme: if no userinfo).
-fn parse_hostport_params_headers(s: &str, warnings: &mut Warnings) -> HostportResult {
-    let err = |msg: &str| ParseSipUriError(msg.to_string());
-
-    let (host, consumed) = Host::parse_from_uri(s, warnings).map_err(|e| err(&e))?;
+fn parse_hostport_params_headers(s: &str, warnings: &mut Warnings) -> Hostport {
+    let (host, consumed) = Host::parse_from_uri(s, warnings);
 
     let rest = &s[consumed..];
 
@@ -370,18 +358,22 @@ fn parse_hostport_params_headers(s: &str, warnings: &mut Warnings) -> HostportRe
             .unwrap_or(after.len());
         let port_str = &after[..end];
 
-        if port_str.is_empty() {
+        let port = if port_str.is_empty() {
             warnings.push(Component::Port, WarningCode::EmptyPort, rest, 0);
-            (None, &after[end..])
+            None
         } else {
             if port_str.starts_with('+') {
                 warnings.push(Component::Port, WarningCode::SignedPort, port_str, 0);
             }
-            let port: u16 = port_str
-                .parse()
-                .map_err(|_| err("port is not a number in 0-65535"))?;
-            (Some(port), &after[end..])
-        }
+            let port = port_str
+                .parse::<u16>()
+                .ok();
+            if port.is_none() {
+                warnings.push(Component::Port, WarningCode::InvalidPort, port_str, 0);
+            }
+            port
+        };
+        (port, &after[end..])
     } else {
         (None, rest)
     };
@@ -410,6 +402,19 @@ fn parse_hostport_params_headers(s: &str, warnings: &mut Warnings) -> HostportRe
         (rest, None)
     };
 
+    let rest = match rest.find([';', '?']) {
+        Some(0) => rest,
+        Some(start) => {
+            warnings.push(Component::Host, WarningCode::TrailingContent, rest, 0);
+            &rest[start..]
+        }
+        None if rest.is_empty() => rest,
+        None => {
+            warnings.push(Component::Host, WarningCode::TrailingContent, rest, 0);
+            ""
+        }
+    };
+
     let (params_str, headers_str) = if let Some(rest) = rest.strip_prefix(';') {
         match rest.split_once('?') {
             Some((params, headers)) => (Some(params), Some(headers)),
@@ -417,61 +422,48 @@ fn parse_hostport_params_headers(s: &str, warnings: &mut Warnings) -> HostportRe
         }
     } else if let Some(rest) = rest.strip_prefix('?') {
         (None, Some(rest))
-    } else if rest.is_empty() {
-        (None, None)
     } else {
-        return Err(err("unexpected character after host/port"));
+        (None, None)
     };
 
     let uri_params = match params_str {
-        Some(p) => params::parse_params(p, &params::SIP_PARAMS, warnings)
-            .map_err(|e| err(&format!("URI param: {e}")))?,
+        Some(p) => params::parse_params(p, &params::SIP_PARAMS, warnings),
         None => Vec::new(),
     };
 
     let headers = match headers_str {
-        Some(h) => params::parse_headers(h, warnings).map_err(|e| err(&format!("header: {e}")))?,
+        Some(h) => params::parse_headers(h, warnings),
         None => Vec::new(),
     };
 
-    Ok((host, port, uri_params, headers, fragment))
+    (host, port, uri_params, headers, fragment)
 }
 
 impl fmt::Display for SipUri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:", self.scheme)?;
+        if let Some(scheme) = self.scheme {
+            write!(f, "{scheme}:")?;
+        }
 
-        // Userinfo
         if let Some(ref user) = self.user {
             write!(f, "{user}")?;
-
-            // User-params
             params::format_params(&self.user_params, f)?;
-
-            // Password
             if let Some(ref pwd) = self.password {
                 write!(f, ":{pwd}")?;
             }
-
             write!(f, "@")?;
         } else if let Some(ref pwd) = self.password {
             write!(f, ":{pwd}@")?;
         }
 
-        write!(f, "{}", self.host)?;
-
-        // Port
+        if let Some(ref host) = self.host {
+            write!(f, "{host}")?;
+        }
         if let Some(port) = self.port {
             write!(f, ":{port}")?;
         }
-
-        // URI parameters
         params::format_params(&self.params, f)?;
-
-        // Headers
         params::format_headers(&self.headers, f)?;
-
-        // Fragment
         if let Some(ref frag) = self.fragment {
             write!(f, "#{frag}")?;
         }
@@ -490,9 +482,9 @@ mod tests {
         let uri: SipUri = "sip:joe@example.com"
             .parse()
             .unwrap();
-        assert_eq!(uri.scheme(), Scheme::Sip);
+        assert_eq!(uri.scheme(), Some(Scheme::Sip));
         assert_eq!(uri.user(), Some("joe"));
-        assert_eq!(uri.host(), &Host::Hostname("example.com".into()));
+        assert_eq!(uri.host(), Some(&Host::Hostname("example.com".into())));
         assert_eq!(uri.port(), None);
     }
 
@@ -502,7 +494,7 @@ mod tests {
             .parse()
             .unwrap();
         assert_eq!(uri.user(), Some("u"));
-        assert_eq!(uri.host(), &Host::Hostname("h".into()));
+        assert_eq!(uri.host(), Some(&Host::Hostname("h".into())));
     }
 
     #[test]
@@ -511,7 +503,7 @@ mod tests {
             .parse()
             .unwrap();
         assert_eq!(uri.user(), None);
-        assert_eq!(uri.host(), &Host::Hostname("test.host".into()));
+        assert_eq!(uri.host(), Some(&Host::Hostname("test.host".into())));
     }
 
     #[test]
@@ -519,7 +511,10 @@ mod tests {
         let uri: SipUri = "sip:172.21.55.55"
             .parse()
             .unwrap();
-        assert_eq!(uri.host(), &Host::IPv4(Ipv4Addr::new(172, 21, 55, 55)));
+        assert_eq!(
+            uri.host(),
+            Some(&Host::IPv4(Ipv4Addr::new(172, 21, 55, 55)))
+        );
     }
 
     #[test]
@@ -527,7 +522,10 @@ mod tests {
         let uri: SipUri = "sip:172.21.55.55:5060"
             .parse()
             .unwrap();
-        assert_eq!(uri.host(), &Host::IPv4(Ipv4Addr::new(172, 21, 55, 55)));
+        assert_eq!(
+            uri.host(),
+            Some(&Host::IPv4(Ipv4Addr::new(172, 21, 55, 55)))
+        );
         assert_eq!(uri.port(), Some(5060));
     }
 
@@ -536,10 +534,10 @@ mod tests {
         let uri: SipUri = "sips:user:pass@host:32;param=1?From=foo@bar&To=bar@baz"
             .parse()
             .unwrap();
-        assert_eq!(uri.scheme(), Scheme::Sips);
+        assert_eq!(uri.scheme(), Some(Scheme::Sips));
         assert_eq!(uri.user(), Some("user"));
         assert_eq!(uri.password(), Some("pass"));
-        assert_eq!(uri.host(), &Host::Hostname("host".into()));
+        assert_eq!(uri.host(), Some(&Host::Hostname("host".into())));
         assert_eq!(uri.port(), Some(32));
         assert_eq!(uri.params(), &[("param".into(), Some("1".into()))]);
         assert_eq!(uri.header("From"), Some("foo%40bar"));
@@ -551,7 +549,7 @@ mod tests {
         let uri: SipUri = "SIP:test@127.0.0.1:55"
             .parse()
             .unwrap();
-        assert_eq!(uri.scheme(), Scheme::Sip);
+        assert_eq!(uri.scheme(), Some(Scheme::Sip));
         assert_eq!(uri.user(), Some("test"));
         assert_eq!(uri.port(), Some(55));
     }
@@ -561,7 +559,7 @@ mod tests {
         let uri: SipUri = "SIP:test@127.0.0.1:"
             .parse()
             .unwrap();
-        assert_eq!(uri.scheme(), Scheme::Sip);
+        assert_eq!(uri.scheme(), Some(Scheme::Sip));
         assert_eq!(uri.port(), None);
     }
 
@@ -597,7 +595,8 @@ mod tests {
         assert_eq!(uri.user_params(), &[("?/".into(), None)]);
         assert_eq!(uri.password(), Some("&=+$,"));
         assert_eq!(
-            uri.host(),
+            uri.host()
+                .unwrap(),
             &Host::IPv6(
                 "::1"
                     .parse()
@@ -636,24 +635,29 @@ mod tests {
     }
 
     #[test]
-    fn invalid_double_colon_port() {
-        assert!("sip:test@127.0.0.1::55"
-            .parse::<SipUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn invalid_trailing_colon_port() {
-        assert!("sip:test@127.0.0.1:55:"
-            .parse::<SipUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn invalid_non_numeric_port() {
-        assert!("sip:test@127.0.0.1:sip"
-            .parse::<SipUri>()
-            .is_err());
+    fn invalid_ports_are_dropped() {
+        for input in [
+            "sip:test@127.0.0.1::55",
+            "sip:test@127.0.0.1:55:",
+            "sip:test@127.0.0.1:sip",
+        ] {
+            let parsed = SipUri::parse_with_warnings(input).unwrap();
+            assert_eq!(
+                parsed
+                    .value
+                    .port(),
+                None,
+                "{input}"
+            );
+            assert!(
+                parsed
+                    .warnings
+                    .iter()
+                    .any(|w| w.code == WarningCode::InvalidPort),
+                "{input}: {:?}",
+                parsed.warnings
+            );
+        }
     }
 
     #[test]

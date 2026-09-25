@@ -16,13 +16,13 @@
 //!
 //! // Parse a tel: URI
 //! let tel: TelUri = "tel:+15551234567;cpc=emergency".parse().unwrap();
-//! assert_eq!(tel.number(), "+15551234567");
+//! assert_eq!(tel.number(), Some("+15551234567"));
 //! assert!(tel.is_global());
 //!
 //! // Parse a URN (e.g. NG911 service identifier)
 //! let urn: UrnUri = "urn:service:sos".parse().unwrap();
-//! assert_eq!(urn.nid(), "service");
-//! assert_eq!(urn.nss(), "sos");
+//! assert_eq!(urn.nid(), Some("service"));
+//! assert_eq!(urn.nss(), Some("sos"));
 //!
 //! // Dispatch on URI type
 //! let uri: Uri = "urn:service:sos".parse().unwrap();

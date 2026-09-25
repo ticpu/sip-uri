@@ -2,6 +2,8 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::error::ParseUriError;
+use crate::parse::{self, SchemeSplit};
+use crate::sip_uri::Scheme;
 use crate::sip_uri::SipUri;
 use crate::tel_uri::TelUri;
 use crate::urn_uri::UrnUri;
@@ -91,19 +93,18 @@ impl Uri {
     }
 
     /// The scheme of this URI: lowercase for the parsed variants, as written
-    /// for [`Uri::Other`].
-    pub fn scheme(&self) -> &str {
+    /// for [`Uri::Other`], `None` when the input had none.
+    pub fn scheme(&self) -> Option<&str> {
         match self {
             Uri::Sip(u) => u
                 .scheme()
-                .as_str(),
-            Uri::Tel(_) => "tel",
-            Uri::Urn(_) => "urn",
-            // Uri::Other is only constructed by FromStr, which requires ':'
-            Uri::Other(s) => s
-                .find(':')
-                .map(|i| &s[..i])
-                .unwrap_or(s),
+                .map(Scheme::as_str),
+            Uri::Tel(_) => Some("tel"),
+            Uri::Urn(_) => Some("urn"),
+            Uri::Other(s) => match parse::split_scheme(s) {
+                SchemeSplit::Named(scheme, _) => Some(scheme),
+                SchemeSplit::Invalid | SchemeSplit::Absent => None,
+            },
         }
     }
 
@@ -115,7 +116,7 @@ impl Uri {
     pub fn user(&self) -> Option<&str> {
         match self {
             Uri::Sip(u) => u.user(),
-            Uri::Tel(u) => Some(u.number()),
+            Uri::Tel(u) => u.number(),
             Uri::Urn(_) | Uri::Other(_) => None,
         }
     }
@@ -150,22 +151,11 @@ impl FromStr for Uri {
 impl Uri {
     /// Parse, reporting accepted grammar breaches beside the value.
     ///
-    /// Accepts exactly what [`FromStr`] accepts. An unrecognized scheme
-    /// outside the RFC 3986 grammar, such as a URI still wrapped in `<>`,
-    /// is kept as [`Uri::Other`] with a warning.
+    /// Accepts exactly what [`FromStr`] accepts: everything but empty input.
+    /// Input without a scheme, or with one outside the RFC 3986 grammar such
+    /// as a URI still wrapped in `<>`, is kept as [`Uri::Other`] with a
+    /// warning.
     pub fn parse_with_warnings(s: &str) -> Result<Parsed<Self>, ParseUriError> {
-        if s == "*" {
-            return Err(ParseUriError(
-                "wildcard '*' is not a URI; handle it at the protocol layer (Contact: * or OPTIONS * SIP/2.0)".into(),
-            ));
-        }
-
-        // Detect scheme by scanning to first `:`
-        let colon = s
-            .find(':')
-            .ok_or_else(|| ParseUriError("missing scheme".into()))?;
-        let scheme = &s[..colon];
-
         fn wrap<T>(parsed: Parsed<T>, variant: fn(T) -> Uri) -> Parsed<Uri> {
             Parsed {
                 value: variant(parsed.value),
@@ -173,29 +163,35 @@ impl Uri {
             }
         }
 
-        if scheme.eq_ignore_ascii_case("tel") {
-            Ok(wrap(TelUri::parse_with_warnings(s)?, Uri::Tel))
-        } else if scheme.eq_ignore_ascii_case("sip") || scheme.eq_ignore_ascii_case("sips") {
-            Ok(wrap(SipUri::parse_with_warnings(s)?, Uri::Sip))
-        } else if scheme.eq_ignore_ascii_case("urn") {
-            Ok(wrap(UrnUri::parse_with_warnings(s)?, Uri::Urn))
-        } else {
-            let mut warnings = Warnings::new(s);
-            if !is_rfc3986_scheme(scheme) {
-                warnings.push(Component::Scheme, WarningCode::InvalidScheme, scheme, 0);
-            }
-            Ok(warnings.finish(Uri::Other(s.to_string())))
+        if s.is_empty() {
+            return Err(ParseUriError("empty input".into()));
         }
+        let mut warnings = Warnings::new(s);
+        match parse::split_scheme(s) {
+            SchemeSplit::Named(scheme, _) if scheme.eq_ignore_ascii_case("tel") => {
+                return Ok(wrap(TelUri::parse_with_warnings(s)?, Uri::Tel));
+            }
+            SchemeSplit::Named(scheme, _)
+                if scheme.eq_ignore_ascii_case("sip") || scheme.eq_ignore_ascii_case("sips") =>
+            {
+                return Ok(wrap(SipUri::parse_with_warnings(s)?, Uri::Sip));
+            }
+            SchemeSplit::Named(scheme, _) if scheme.eq_ignore_ascii_case("urn") => {
+                return Ok(wrap(UrnUri::parse_with_warnings(s)?, Uri::Urn));
+            }
+            SchemeSplit::Named(..) => {}
+            SchemeSplit::Invalid => {
+                warnings.push(Component::Scheme, WarningCode::InvalidScheme, s, 0);
+            }
+            SchemeSplit::Absent if s == "*" => {
+                warnings.push(Component::Scheme, WarningCode::Wildcard, s, 0);
+            }
+            SchemeSplit::Absent => {
+                warnings.push(Component::Scheme, WarningCode::MissingScheme, s, 0);
+            }
+        }
+        Ok(warnings.finish(Uri::Other(s.to_string())))
     }
-}
-
-/// RFC 3986 §3.1: `scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`
-fn is_rfc3986_scheme(s: &str) -> bool {
-    let mut bytes = s.bytes();
-    bytes
-        .next()
-        .is_some_and(|b| b.is_ascii_alphabetic())
-        && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'))
 }
 
 impl fmt::Display for Uri {
@@ -274,7 +270,7 @@ mod tests {
             .parse()
             .unwrap();
         assert_eq!(uri.as_other(), Some("http://example.com"));
-        assert_eq!(uri.scheme(), "http");
+        assert_eq!(uri.scheme(), Some("http"));
         assert!(uri
             .as_sip()
             .is_none());
@@ -296,8 +292,22 @@ mod tests {
     }
 
     #[test]
-    fn missing_scheme_fails() {
-        assert!("no-colon-here"
+    fn missing_scheme_is_other() {
+        let parsed = Uri::parse_with_warnings("no-colon-here").unwrap();
+        assert_eq!(
+            parsed
+                .value
+                .as_other(),
+            Some("no-colon-here")
+        );
+        assert_eq!(
+            parsed
+                .value
+                .scheme(),
+            None
+        );
+        assert_eq!(parsed.warnings[0].code, WarningCode::MissingScheme);
+        assert!(""
             .parse::<Uri>()
             .is_err());
     }

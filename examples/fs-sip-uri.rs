@@ -16,7 +16,7 @@
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use sip_uri::{ParseWarning, SipUri, Uri};
+use sip_uri::{Host, ParseWarning, SipUri, Uri, UrnUri};
 
 /// Separator for the `vars` payload, matching the `^^|` prefix the dialplan
 /// hands to `multiset`. Any component containing it aborts the whole payload:
@@ -214,10 +214,9 @@ fn get(uri: &Uri, field: &str) -> Result<Option<String>, String> {
 
     Ok(match field {
         "type" => Some(uri_type(uri).to_string()),
-        "scheme" => Some(
-            uri.scheme()
-                .to_string(),
-        ),
+        "scheme" => uri
+            .scheme()
+            .map(str::to_string),
         "uri" => Some(uri.to_string()),
         "user" => uri
             .user()
@@ -228,26 +227,20 @@ fn get(uri: &Uri, field: &str) -> Result<Option<String>, String> {
             .map(str::to_string),
         "host" => uri
             .as_sip()
-            .map(|u| {
-                u.host()
-                    .to_string()
-            }),
+            .and_then(SipUri::host)
+            .map(Host::to_string),
         "port" => uri
             .as_sip()
             .and_then(SipUri::port)
             .map(|p| p.to_string()),
         "nid" => uri
             .as_urn()
-            .map(|u| {
-                u.nid()
-                    .to_string()
-            }),
+            .and_then(UrnUri::nid)
+            .map(str::to_string),
         "nss" => uri
             .as_urn()
-            .map(|u| {
-                u.nss()
-                    .to_string()
-            }),
+            .and_then(UrnUri::nss)
+            .map(str::to_string),
         _ => return Err(format!("unknown field {field:?}")),
     })
 }
@@ -266,22 +259,18 @@ fn vars(uri: &Uri) -> Vec<(String, String)> {
     };
 
     push("type".into(), uri_type(uri).into());
-    push(
-        "scheme".into(),
-        uri.scheme()
-            .into(),
-    );
+    if let Some(scheme) = uri.scheme() {
+        push("scheme".into(), scheme.into());
+    }
     if let Some(user) = uri.user() {
         push("user".into(), user.into());
     }
 
     match uri {
         Uri::Sip(u) => {
-            push(
-                "host".into(),
-                u.host()
-                    .to_string(),
-            );
+            if let Some(host) = u.host() {
+                push("host".into(), host.to_string());
+            }
             if let Some(port) = u.port() {
                 push("port".into(), port.to_string());
             }
@@ -316,16 +305,12 @@ fn vars(uri: &Uri) -> Vec<(String, String)> {
             }
         }
         Uri::Urn(u) => {
-            push(
-                "nid".into(),
-                u.nid()
-                    .into(),
-            );
-            push(
-                "nss".into(),
-                u.nss()
-                    .into(),
-            );
+            if let Some(nid) = u.nid() {
+                push("nid".into(), nid.into());
+            }
+            if let Some(nss) = u.nss() {
+                push("nss".into(), nss.into());
+            }
         }
         _ => {}
     }

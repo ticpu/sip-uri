@@ -87,6 +87,10 @@ pub enum Component {
     QComponent,
     /// URN f-component (`#`).
     FComponent,
+    /// URN namespace identifier.
+    Nid,
+    /// URN namespace-specific string.
+    Nss,
 }
 
 impl Component {
@@ -103,6 +107,8 @@ impl Component {
             Component::Header => "header",
             Component::Fragment => "fragment",
             Component::Number => "number",
+            Component::Nid => "nid",
+            Component::Nss => "nss",
             Component::RComponent => "r-component",
             Component::QComponent => "q-component",
             Component::FComponent => "f-component",
@@ -148,6 +154,34 @@ pub enum WarningCode {
     EmptyComponent,
     /// A scheme outside the RFC 3986 grammar.
     InvalidScheme,
+    /// No scheme before the rest of the URI.
+    MissingScheme,
+    /// `*`, which is not a URI but the Contact and OPTIONS wildcard.
+    Wildcard,
+    /// No host where the grammar requires one.
+    MissingHost,
+    /// A bracketed IPv6 reference that is unclosed or not an IPv6 address.
+    InvalidIpv6,
+    /// A port that is not a number in 0-65535, dropped.
+    InvalidPort,
+    /// Text after the host or port that starts no component, dropped.
+    TrailingContent,
+    /// A URI header with no `=`, read as an empty value.
+    MissingValue,
+    /// An empty user before user-params.
+    EmptyUser,
+    /// An `@` with no userinfo before it, dropped.
+    EmptyUserinfo,
+    /// A tel: URI with no number.
+    MissingNumber,
+    /// A tel: number with no digit.
+    NoDigits,
+    /// A URN with no namespace identifier.
+    MissingNid,
+    /// A URN with no namespace-specific string.
+    MissingNss,
+    /// A URN namespace identifier outside RFC 8141's length or character rules.
+    InvalidNid,
 }
 
 impl WarningCode {
@@ -170,6 +204,20 @@ impl WarningCode {
             WarningCode::MissingPhoneContext => "missing-phone-context",
             WarningCode::EmptyComponent => "empty-component",
             WarningCode::InvalidScheme => "invalid-scheme",
+            WarningCode::MissingScheme => "missing-scheme",
+            WarningCode::Wildcard => "wildcard",
+            WarningCode::MissingHost => "missing-host",
+            WarningCode::InvalidIpv6 => "invalid-ipv6",
+            WarningCode::InvalidPort => "invalid-port",
+            WarningCode::TrailingContent => "trailing-content",
+            WarningCode::MissingValue => "missing-value",
+            WarningCode::EmptyUser => "empty-user",
+            WarningCode::EmptyUserinfo => "empty-userinfo",
+            WarningCode::MissingNumber => "missing-number",
+            WarningCode::NoDigits => "no-digits",
+            WarningCode::MissingNid => "missing-nid",
+            WarningCode::MissingNss => "missing-nss",
+            WarningCode::InvalidNid => "invalid-nid",
         }
     }
 
@@ -191,14 +239,37 @@ impl WarningCode {
             WarningCode::MissingPhoneContext => "local number without phone-context",
             WarningCode::EmptyComponent => "empty component",
             WarningCode::InvalidScheme => "invalid scheme",
+            WarningCode::MissingScheme => "missing scheme",
+            WarningCode::Wildcard => "wildcard is not a URI",
+            WarningCode::MissingHost => "missing host",
+            WarningCode::InvalidIpv6 => "invalid IPv6 reference dropped",
+            WarningCode::InvalidPort => "invalid port dropped",
+            WarningCode::TrailingContent => "trailing content dropped",
+            WarningCode::MissingValue => "header without '='",
+            WarningCode::EmptyUser => "empty user",
+            WarningCode::EmptyUserinfo => "empty userinfo dropped",
+            WarningCode::MissingNumber => "missing number",
+            WarningCode::NoDigits => "number without digits",
+            WarningCode::MissingNid => "missing namespace identifier",
+            WarningCode::MissingNss => "missing namespace-specific string",
+            WarningCode::InvalidNid => "invalid namespace identifier",
         }
     }
 
     fn kind(self) -> WarningKind {
         match self {
-            WarningCode::EmptySegment | WarningCode::EmptyPort | WarningCode::EmptyFragment => {
-                WarningKind::Lost
-            }
+            WarningCode::EmptySegment
+            | WarningCode::EmptyPort
+            | WarningCode::EmptyFragment
+            | WarningCode::MissingScheme
+            | WarningCode::MissingHost
+            | WarningCode::InvalidIpv6
+            | WarningCode::InvalidPort
+            | WarningCode::TrailingContent
+            | WarningCode::EmptyUserinfo
+            | WarningCode::MissingNumber
+            | WarningCode::MissingNid
+            | WarningCode::MissingNss => WarningKind::Lost,
             _ => WarningKind::Recovered,
         }
     }
