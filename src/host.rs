@@ -8,8 +8,8 @@ use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// Host component of a SIP URI.
 ///
-/// IPv6 addresses are stored without brackets; [`fmt::Display`] adds brackets
-/// when formatting in URI context via [`Host::fmt_uri`].
+/// IPv6 addresses are stored without brackets; [`fmt::Display`] adds them,
+/// and [`Host::bare`] renders without.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Host {
@@ -145,12 +145,9 @@ fn find_host_end(s: &str) -> usize {
 
 impl Host {
     /// Format the host for use inside a URI (brackets around IPv6).
+    #[deprecated(since = "0.2.9", note = "use the Display impl, which renders the same")]
     pub fn fmt_uri(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Host::IPv4(addr) => write!(f, "{addr}"),
-            Host::IPv6(addr) => write!(f, "[{addr}]"),
-            Host::Hostname(name) => write!(f, "{name}"),
-        }
+        fmt::Display::fmt(self, f)
     }
 
     /// Render without IPv6 brackets, for contexts that supply their own or take
@@ -236,7 +233,11 @@ impl Host {
 
 impl fmt::Display for Host {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.fmt_uri(f)
+        match self {
+            Host::IPv4(addr) => write!(f, "{addr}"),
+            Host::IPv6(addr) => write!(f, "[{addr}]"),
+            Host::Hostname(name) => write!(f, "{name}"),
+        }
     }
 }
 

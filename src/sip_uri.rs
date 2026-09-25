@@ -458,9 +458,7 @@ impl fmt::Display for SipUri {
             write!(f, ":{pwd}@")?;
         }
 
-        // Host
-        self.host
-            .fmt_uri(f)?;
+        write!(f, "{}", self.host)?;
 
         // Port
         if let Some(port) = self.port {
