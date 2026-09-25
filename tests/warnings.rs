@@ -1,5 +1,5 @@
 use sip_uri::{
-    Component, Host, ParseWarning, SipUri, TelUri, Uri, UrnUri, WarningCode, WarningKind,
+    Component, Host, ParseWarning, SipUri, TelUri, Uri, UriParse, UrnUri, WarningCode, WarningKind,
 };
 
 fn codes(warnings: &[ParseWarning]) -> Vec<(Component, WarningCode)> {
@@ -11,18 +11,14 @@ fn codes(warnings: &[ParseWarning]) -> Vec<(Component, WarningCode)> {
 
 fn sip(input: &str) -> (SipUri, Vec<ParseWarning>) {
     let parsed = SipUri::parse_with_warnings(input).unwrap();
-    let reparsed: SipUri = parsed
-        .value
-        .to_string()
-        .parse()
-        .unwrap();
+    let reparsed = SipUri::parse(
+        &parsed
+            .value
+            .to_string(),
+    )
+    .unwrap();
     assert_eq!(reparsed, parsed.value, "round-trip of {input:?}");
-    assert_eq!(
-        input
-            .parse::<SipUri>()
-            .unwrap(),
-        parsed.value
-    );
+    assert_eq!(SipUri::parse(input).unwrap(), parsed.value);
     (parsed.value, parsed.warnings)
 }
 
@@ -536,12 +532,8 @@ fn errors_never_quote_input() {
 
 #[test]
 fn other_scheme_is_lowercased() {
-    let upper: Uri = "HTTPS://example.com/Photo.jpg"
-        .parse()
-        .unwrap();
-    let lower: Uri = "https://example.com/Photo.jpg"
-        .parse()
-        .unwrap();
+    let upper = Uri::parse("HTTPS://example.com/Photo.jpg").unwrap();
+    let lower = Uri::parse("https://example.com/Photo.jpg").unwrap();
     assert_eq!(upper, lower);
     assert_eq!(upper.scheme(), Some("https"));
     assert_eq!(upper.to_string(), "https://example.com/Photo.jpg");
@@ -550,8 +542,6 @@ fn other_scheme_is_lowercased() {
 #[test]
 fn built_hostname_equals_parsed() {
     let built = SipUri::new(Host::Hostname("EXAMPLE.COM".into())).with_user("alice");
-    let parsed: SipUri = "sip:alice@example.com"
-        .parse()
-        .unwrap();
+    let parsed = SipUri::parse("sip:alice@example.com").unwrap();
     assert_eq!(built, parsed);
 }

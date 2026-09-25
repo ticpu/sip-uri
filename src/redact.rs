@@ -85,9 +85,9 @@ impl SipUri {
     /// Render for logs, masking what `how` names.
     ///
     /// ```
-    /// use sip_uri::{Redaction, SipUri, UserMask};
+    /// use sip_uri::{Redaction, SipUri, UriParse, UserMask};
     ///
-    /// let uri: SipUri = "sip:+15551234567;cpc=emergency:pw@example.com".parse().unwrap();
+    /// let uri = SipUri::parse("sip:+15551234567;cpc=emergency:pw@example.com").unwrap();
     /// assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com");
     /// assert_eq!(
     ///     uri.redacted(Redaction::default().user(UserMask::KeepLast(4))).to_string(),

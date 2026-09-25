@@ -16,7 +16,7 @@
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use sip_uri::{Host, ParseWarning, SipUri, Uri, UrnUri};
+use sip_uri::{Host, ParseWarning, SipUri, Uri, UriParse, UrnUri};
 
 /// Separator for the `vars` payload, matching the `^^|` prefix the dialplan
 /// hands to `multiset`. Any component containing it aborts the whole payload.

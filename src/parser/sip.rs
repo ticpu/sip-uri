@@ -1,42 +1,9 @@
-use std::str::FromStr;
-
 use super::host::parse_from_uri;
 use super::params::{self, parse_headers, parse_params};
 use crate::error::ParseError;
 use crate::grammar::{self, SchemeSplit};
 use crate::sip_uri::{Scheme, SipUri, SipUriParts};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
-
-impl FromStr for SipUri {
-    type Err = ParseError;
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        Self::parse_with_warnings(input).map(|parsed| parsed.value)
-    }
-}
-
-impl SipUri {
-    /// Parse, rejecting any grammar breach as [`ParseError::NonConformant`].
-    pub fn parse_strict(input: &str) -> Result<Self, ParseError> {
-        Self::parse_with_warnings(input)?.into_strict()
-    }
-
-    /// Parse, reporting accepted grammar breaches beside the value.
-    ///
-    /// Accepts exactly what [`FromStr`] accepts: everything except empty
-    /// input and a scheme other than `sip`/`sips`.
-    ///
-    /// ```
-    /// use sip_uri::{SipUri, WarningCode};
-    ///
-    /// let parsed = SipUri::parse_with_warnings("sip:host:+5060").unwrap();
-    /// assert_eq!(parsed.value.port(), Some(5060));
-    /// assert_eq!(parsed.warnings[0].code, WarningCode::SignedPort);
-    /// ```
-    pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseError> {
-        parse(input)
-    }
-}
 
 pub(crate) fn parse(input: &str) -> Result<Parsed<SipUri>, ParseError> {
     if input.is_empty() {
@@ -224,13 +191,12 @@ fn split_hostport_params_headers(s: &str, parts: &mut SipUriParts, warnings: &mu
 mod tests {
     use super::*;
     use crate::host::Host;
+    use crate::UriParse;
     use std::net::Ipv4Addr;
 
     #[test]
     fn parse_simple() {
-        let uri: SipUri = "sip:joe@example.com"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:joe@example.com").unwrap();
         assert_eq!(uri.scheme(), Some(Scheme::Sip));
         assert_eq!(uri.user(), Some("joe"));
         assert_eq!(uri.host(), Some(&Host::Hostname("example.com".into())));
@@ -239,27 +205,21 @@ mod tests {
 
     #[test]
     fn parse_minimal_user_host() {
-        let uri: SipUri = "sip:u@h"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:u@h").unwrap();
         assert_eq!(uri.user(), Some("u"));
         assert_eq!(uri.host(), Some(&Host::Hostname("h".into())));
     }
 
     #[test]
     fn parse_host_only() {
-        let uri: SipUri = "sip:test.host"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:test.host").unwrap();
         assert_eq!(uri.user(), None);
         assert_eq!(uri.host(), Some(&Host::Hostname("test.host".into())));
     }
 
     #[test]
     fn parse_ipv4_host() {
-        let uri: SipUri = "sip:172.21.55.55"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:172.21.55.55").unwrap();
         assert_eq!(
             uri.host(),
             Some(&Host::IPv4(Ipv4Addr::new(172, 21, 55, 55)))
@@ -268,9 +228,7 @@ mod tests {
 
     #[test]
     fn parse_ipv4_with_port() {
-        let uri: SipUri = "sip:172.21.55.55:5060"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:172.21.55.55:5060").unwrap();
         assert_eq!(
             uri.host(),
             Some(&Host::IPv4(Ipv4Addr::new(172, 21, 55, 55)))
@@ -280,9 +238,7 @@ mod tests {
 
     #[test]
     fn parse_full_sips() {
-        let uri: SipUri = "sips:user:pass@host:32;param=1?From=foo@bar&To=bar@baz"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sips:user:pass@host:32;param=1?From=foo@bar&To=bar@baz").unwrap();
         assert_eq!(uri.scheme(), Some(Scheme::Sips));
         assert_eq!(uri.user(), Some("user"));
         assert_eq!(uri.password(), Some("pass"));
@@ -295,9 +251,7 @@ mod tests {
 
     #[test]
     fn parse_case_insensitive_scheme() {
-        let uri: SipUri = "SIP:test@127.0.0.1:55"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("SIP:test@127.0.0.1:55").unwrap();
         assert_eq!(uri.scheme(), Some(Scheme::Sip));
         assert_eq!(uri.user(), Some("test"));
         assert_eq!(uri.port(), Some(55));
@@ -305,27 +259,21 @@ mod tests {
 
     #[test]
     fn parse_empty_port() {
-        let uri: SipUri = "SIP:test@127.0.0.1:"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("SIP:test@127.0.0.1:").unwrap();
         assert_eq!(uri.scheme(), Some(Scheme::Sip));
         assert_eq!(uri.port(), None);
     }
 
     #[test]
     fn parse_percent_encoded_user() {
-        let uri: SipUri = "sip:%22foo%22@172.21.55.55:5060"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:%22foo%22@172.21.55.55:5060").unwrap();
         // %22 is double-quote, not unreserved, stays encoded
         assert_eq!(uri.user(), Some("%22foo%22"));
     }
 
     #[test]
     fn parse_user_with_slash_semicolon() {
-        let uri: SipUri = "sip:user/path;tel-param:pass@host:32;param=1%3d%3d1"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:user/path;tel-param:pass@host:32;param=1%3d%3d1").unwrap();
         assert_eq!(uri.user(), Some("user/path"));
         assert_eq!(uri.user_params(), &[("tel-param".into(), None)]);
         assert_eq!(uri.password(), Some("pass"));
@@ -335,9 +283,7 @@ mod tests {
 
     #[test]
     fn parse_reserved_chars_in_user_ipv6() {
-        let uri: SipUri = "sip:&=+$,;?/:&=+$,@[::1]:56001;param=+$,/:@&"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:&=+$,;?/:&=+$,@[::1]:56001;param=+$,/:@&").unwrap();
         assert_eq!(uri.user(), Some("&=+$,"));
         // `;` splits user from user-params, `?/` is a param name (no `=`),
         // and `:` splits the remaining `&=+$,` as the password
@@ -358,27 +304,21 @@ mod tests {
     #[test]
     fn parse_hash_in_user() {
         // Sofia-sip compatibility: phones put unescaped # in user
-        let uri: SipUri = "SIP:#**00**#;foo=/bar@127.0.0.1"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("SIP:#**00**#;foo=/bar@127.0.0.1").unwrap();
         assert_eq!(uri.user(), Some("#**00**#"));
         assert_eq!(uri.user_params(), &[("foo".into(), Some("/bar".into()))]);
     }
 
     #[test]
     fn parse_transport_params() {
-        let uri: SipUri = "sip:u:p@host:5060;maddr=127.0.0.1;transport=tcp"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:u:p@host:5060;maddr=127.0.0.1;transport=tcp").unwrap();
         assert_eq!(uri.param("transport"), Some(Some("tcp")));
         assert_eq!(uri.param("maddr"), Some(Some("127.0.0.1")));
     }
 
     #[test]
     fn parse_params_without_value() {
-        let uri: SipUri = "sip:u:p@host:5060;user=phone;ttl=1;isfocus"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:u:p@host:5060;user=phone;ttl=1;isfocus").unwrap();
         assert_eq!(uri.param("user"), Some(Some("phone")));
         assert_eq!(uri.param("isfocus"), Some(None));
     }
@@ -412,17 +352,13 @@ mod tests {
     #[test]
     fn display_roundtrip_simple() {
         let input = "sip:joe@example.com";
-        let uri: SipUri = input
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse(input).unwrap();
         assert_eq!(uri.to_string(), input);
     }
 
     #[test]
     fn display_roundtrip_full() {
-        let uri: SipUri = "sips:user:pass@host:32;param=1?From=foo@bar&To=bar@baz"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sips:user:pass@host:32;param=1?From=foo@bar&To=bar@baz").unwrap();
         assert_eq!(
             uri.to_string(),
             "sips:user:pass@host:32;param=1?From=foo%40bar&To=bar%40baz"
@@ -431,26 +367,20 @@ mod tests {
 
     #[test]
     fn display_keeps_password_without_user() {
-        let uri: SipUri = "sip::pass@host"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip::pass@host").unwrap();
         assert_eq!(uri.password(), Some("pass"));
         assert_eq!(uri.to_string(), "sip::pass@host");
     }
 
     #[test]
     fn user_host_convenience() {
-        let uri: SipUri = "sip:alice@example.com:5060"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:alice@example.com:5060").unwrap();
         assert_eq!(uri.user_host(), "alice@example.com:5060");
     }
 
     #[test]
     fn no_user_with_host_params() {
-        let uri: SipUri = "sip:172.21.55.55:5060;transport=udp"
-            .parse()
-            .unwrap();
+        let uri = SipUri::parse("sip:172.21.55.55:5060;transport=udp").unwrap();
         assert_eq!(uri.user(), None);
         assert_eq!(uri.port(), Some(5060));
         assert_eq!(uri.param("transport"), Some(Some("udp")));

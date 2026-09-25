@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use crate::error::ParseError;
 use crate::grammar::{self, SchemeSplit};
 use crate::urn_uri::{UrnUri, UrnUriParts};
@@ -38,29 +36,6 @@ fn is_pchar(b: u8) -> bool {
                 | b':'
                 | b'@'
         )
-}
-
-impl FromStr for UrnUri {
-    type Err = ParseError;
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        Self::parse_with_warnings(input).map(|parsed| parsed.value)
-    }
-}
-
-impl UrnUri {
-    /// Parse, rejecting any grammar breach as [`ParseError::NonConformant`].
-    pub fn parse_strict(input: &str) -> Result<Self, ParseError> {
-        Self::parse_with_warnings(input)?.into_strict()
-    }
-
-    /// Parse, reporting accepted grammar breaches beside the value.
-    ///
-    /// Accepts exactly what [`FromStr`] accepts: everything except empty
-    /// input and a scheme other than `urn`.
-    pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseError> {
-        parse(input)
-    }
 }
 
 pub(crate) fn parse(input: &str) -> Result<Parsed<UrnUri>, ParseError> {
@@ -177,38 +152,32 @@ fn parse_rq_components(s: &str) -> (Option<&str>, Option<&str>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::UriParse;
 
     #[test]
     fn parse_service_sos() {
-        let urn: UrnUri = "urn:service:sos"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:service:sos").unwrap();
         assert_eq!(urn.nid(), Some("service"));
         assert_eq!(urn.nss(), Some("sos"));
     }
 
     #[test]
     fn parse_service_sos_subtype() {
-        let urn: UrnUri = "urn:service:sos.fire"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:service:sos.fire").unwrap();
         assert_eq!(urn.nid(), Some("service"));
         assert_eq!(urn.nss(), Some("sos.fire"));
     }
 
     #[test]
     fn parse_nena_service() {
-        let urn: UrnUri = "urn:nena:service:sos"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:nena:service:sos").unwrap();
         assert_eq!(urn.nid(), Some("nena"));
         assert_eq!(urn.nss(), Some("service:sos"));
     }
 
     #[test]
     fn parse_nena_uid_callid() {
-        let urn: UrnUri = "urn:nena:callid:20250101120000001TEST001:bcf1.ng911.example.com"
-            .parse()
+        let urn = UrnUri::parse("urn:nena:callid:20250101120000001TEST001:bcf1.ng911.example.com")
             .unwrap();
         assert_eq!(urn.nid(), Some("nena"));
         assert_eq!(
@@ -220,10 +189,10 @@ mod tests {
 
     #[test]
     fn parse_emergency_incidentid() {
-        let urn: UrnUri =
-            "urn:emergency:incidentid:f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6:bcf.ng911.example.com"
-                .parse()
-                .unwrap();
+        let urn = UrnUri::parse(
+            "urn:emergency:incidentid:f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6:bcf.ng911.example.com",
+        )
+        .unwrap();
         assert_eq!(urn.nid(), Some("emergency"));
         assert!(urn
             .nss()
@@ -233,78 +202,60 @@ mod tests {
 
     #[test]
     fn parse_gsma_imei() {
-        let urn: UrnUri = "urn:gsma:imei:35625207-210812-0"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:gsma:imei:35625207-210812-0").unwrap();
         assert_eq!(urn.nid(), Some("gsma"));
         assert_eq!(urn.nss(), Some("imei:35625207-210812-0"));
     }
 
     #[test]
     fn parse_urn7_3gpp() {
-        let urn: UrnUri = "urn:urn-7:3gpp-service.ims.icsi.mmtel"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:urn-7:3gpp-service.ims.icsi.mmtel").unwrap();
         assert_eq!(urn.nid(), Some("urn-7"));
         assert_eq!(urn.nss(), Some("3gpp-service.ims.icsi.mmtel"));
     }
 
     #[test]
     fn parse_uuid() {
-        let urn: UrnUri = "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6").unwrap();
         assert_eq!(urn.nid(), Some("uuid"));
         assert_eq!(urn.nss(), Some("f81d4fae-7dec-11d0-a765-00a0c91e6bf6"));
     }
 
     #[test]
     fn parse_case_insensitive_scheme() {
-        let urn: UrnUri = "URN:service:sos"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("URN:service:sos").unwrap();
         assert_eq!(urn.nid(), Some("service"));
     }
 
     #[test]
     fn nid_case_insensitive() {
-        let urn: UrnUri = "urn:SERVICE:sos"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:SERVICE:sos").unwrap();
         assert_eq!(urn.nid(), Some("service"));
     }
 
     #[test]
     fn nss_percent_encoding_uppercased() {
-        let urn: UrnUri = "urn:example:foo%2fbar"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:example:foo%2fbar").unwrap();
         assert_eq!(urn.nss(), Some("foo%2Fbar"));
     }
 
     #[test]
     fn display_roundtrip() {
         let input = "urn:service:sos.police";
-        let urn: UrnUri = input
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse(input).unwrap();
         assert_eq!(urn.to_string(), input);
     }
 
     #[test]
     fn display_roundtrip_nena_callid() {
         let input = "urn:nena:callid:abc123:host.example.com";
-        let urn: UrnUri = input
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse(input).unwrap();
         assert_eq!(urn.to_string(), input);
     }
 
     #[test]
     fn with_rq_components() {
-        let urn: UrnUri = "urn:example:foo?+resolve?=query#frag"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:example:foo?+resolve?=query#frag").unwrap();
         assert_eq!(urn.nss(), Some("foo"));
         assert_eq!(urn.r_component(), Some("resolve"));
         assert_eq!(urn.q_component(), Some("query"));
@@ -314,27 +265,21 @@ mod tests {
 
     #[test]
     fn with_r_component_only() {
-        let urn: UrnUri = "urn:example:foo?+resolve"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:example:foo?+resolve").unwrap();
         assert_eq!(urn.r_component(), Some("resolve"));
         assert_eq!(urn.q_component(), None);
     }
 
     #[test]
     fn with_q_component_only() {
-        let urn: UrnUri = "urn:example:foo?=query"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:example:foo?=query").unwrap();
         assert_eq!(urn.r_component(), None);
         assert_eq!(urn.q_component(), Some("query"));
     }
 
     #[test]
     fn with_fragment_only() {
-        let urn: UrnUri = "urn:example:foo#section1"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:example:foo#section1").unwrap();
         assert_eq!(urn.f_component(), Some("section1"));
         assert_eq!(urn.r_component(), None);
         assert_eq!(urn.q_component(), None);
@@ -342,25 +287,19 @@ mod tests {
 
     #[test]
     fn assigned_name() {
-        let urn: UrnUri = "urn:service:sos?+r?=q#f"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:service:sos?+r?=q#f").unwrap();
         assert_eq!(urn.assigned_name(), "urn:service:sos");
     }
 
     #[test]
     fn nss_with_slashes() {
-        let urn: UrnUri = "urn:example:a/b/c"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:example:a/b/c").unwrap();
         assert_eq!(urn.nss(), Some("a/b/c"));
     }
 
     #[test]
     fn nss_with_colons() {
-        let urn: UrnUri = "urn:example:a:b:c"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:example:a:b:c").unwrap();
         assert_eq!(urn.nss(), Some("a:b:c"));
     }
 
@@ -368,16 +307,12 @@ mod tests {
 
     #[test]
     fn missing_scheme() {
-        assert!("service:sos"
-            .parse::<UrnUri>()
-            .is_err());
+        assert!(UrnUri::parse("service:sos").is_err());
     }
 
     #[test]
     fn wrong_scheme() {
-        assert!("http:service:sos"
-            .parse::<UrnUri>()
-            .is_err());
+        assert!(UrnUri::parse("http:service:sos").is_err());
     }
 
     #[test]
@@ -403,11 +338,12 @@ mod tests {
                 "{input}"
             );
             assert_eq!(
-                parsed
-                    .value
-                    .to_string()
-                    .parse::<UrnUri>()
-                    .unwrap(),
+                UrnUri::parse(
+                    &parsed
+                        .value
+                        .to_string()
+                )
+                .unwrap(),
                 parsed.value,
                 "{input}"
             );
@@ -418,27 +354,21 @@ mod tests {
     fn service_sos_with_port_in_to_header() {
         // Seen in production: `<urn:service:sos:5060>` in To header
         // The `:5060` is part of the NSS (not a port), and parses fine
-        let urn: UrnUri = "urn:service:sos:5060"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:service:sos:5060").unwrap();
         assert_eq!(urn.nid(), Some("service"));
         assert_eq!(urn.nss(), Some("sos:5060"));
     }
 
     #[test]
     fn vendor_provider_id() {
-        let urn: UrnUri = "urn:example:ng911:lsp:provider1"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:example:ng911:lsp:provider1").unwrap();
         assert_eq!(urn.nid(), Some("example"));
         assert_eq!(urn.nss(), Some("ng911:lsp:provider1"));
     }
 
     #[test]
     fn nena_service_responder_police() {
-        let urn: UrnUri = "urn:nena:service:responder.police"
-            .parse()
-            .unwrap();
+        let urn = UrnUri::parse("urn:nena:service:responder.police").unwrap();
         assert_eq!(urn.nid(), Some("nena"));
         assert_eq!(urn.nss(), Some("service:responder.police"));
     }

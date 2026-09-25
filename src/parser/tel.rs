@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use super::params::{self, parse_params};
 use crate::error::ParseError;
 use crate::grammar::{self, SchemeSplit};
@@ -15,29 +13,6 @@ fn is_phonedigit(c: u8) -> bool {
 /// RFC 3966: `phonedigit-hex = HEXDIG / "*" / "#" / visual-separator`
 fn is_phonedigit_hex(c: u8) -> bool {
     c.is_ascii_hexdigit() || matches!(c, b'*' | b'#' | b'-' | b'.' | b'(' | b')')
-}
-
-impl FromStr for TelUri {
-    type Err = ParseError;
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        Self::parse_with_warnings(input).map(|parsed| parsed.value)
-    }
-}
-
-impl TelUri {
-    /// Parse, rejecting any grammar breach as [`ParseError::NonConformant`].
-    pub fn parse_strict(input: &str) -> Result<Self, ParseError> {
-        Self::parse_with_warnings(input)?.into_strict()
-    }
-
-    /// Parse, reporting accepted grammar breaches beside the value.
-    ///
-    /// Accepts exactly what [`FromStr`] accepts: everything except empty
-    /// input and a scheme other than `tel`.
-    pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseError> {
-        parse(input)
-    }
 }
 
 pub(crate) fn parse(input: &str) -> Result<Parsed<TelUri>, ParseError> {
@@ -145,12 +120,11 @@ fn warn_number(number: &str, has_context: bool, warnings: &mut Warnings) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::UriParse;
 
     #[test]
     fn parse_global() {
-        let uri: TelUri = "tel:+12345678"
-            .parse()
-            .unwrap();
+        let uri = TelUri::parse("tel:+12345678").unwrap();
         assert_eq!(uri.number(), Some("+12345678"));
         assert!(uri.is_global());
         assert!(uri
@@ -160,9 +134,7 @@ mod tests {
 
     #[test]
     fn parse_with_params() {
-        let uri: TelUri = "tel:+12345678;param=1;param=2"
-            .parse()
-            .unwrap();
+        let uri = TelUri::parse("tel:+12345678;param=1;param=2").unwrap();
         assert_eq!(uri.number(), Some("+12345678"));
         assert_eq!(
             uri.params()
@@ -173,44 +145,34 @@ mod tests {
 
     #[test]
     fn parse_local_number() {
-        let uri: TelUri = "tel:911"
-            .parse()
-            .unwrap();
+        let uri = TelUri::parse("tel:911").unwrap();
         assert_eq!(uri.number(), Some("911"));
         assert!(!uri.is_global());
     }
 
     #[test]
     fn parse_local_with_context() {
-        let uri: TelUri = "tel:1411;phone-context=example.com"
-            .parse()
-            .unwrap();
+        let uri = TelUri::parse("tel:1411;phone-context=example.com").unwrap();
         assert_eq!(uri.number(), Some("1411"));
         assert_eq!(uri.param("phone-context"), Some(Some("example.com")));
     }
 
     #[test]
     fn parse_visual_separators() {
-        let uri: TelUri = "tel:+1.245.623-57"
-            .parse()
-            .unwrap();
+        let uri = TelUri::parse("tel:+1.245.623-57").unwrap();
         assert_eq!(uri.number(), Some("+1.245.623-57"));
     }
 
     #[test]
     fn parse_dtmf_local() {
-        let uri: TelUri = "tel:*67"
-            .parse()
-            .unwrap();
+        let uri = TelUri::parse("tel:*67").unwrap();
         assert_eq!(uri.number(), Some("*67"));
     }
 
     #[test]
     fn display_roundtrip() {
         let input = "tel:+12345678;cpc=emergency;oli=0";
-        let uri: TelUri = input
-            .parse()
-            .unwrap();
+        let uri = TelUri::parse(input).unwrap();
         assert_eq!(uri.to_string(), input);
     }
 
@@ -240,16 +202,12 @@ mod tests {
 
     #[test]
     fn empty_input_fails() {
-        assert!(""
-            .parse::<TelUri>()
-            .is_err());
+        assert!(TelUri::parse("").is_err());
     }
 
     #[test]
     fn param_without_value() {
-        let uri: TelUri = "tel:+12345678;oli"
-            .parse()
-            .unwrap();
+        let uri = TelUri::parse("tel:+12345678;oli").unwrap();
         assert_eq!(uri.param("oli"), Some(None));
     }
 }

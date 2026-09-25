@@ -5,8 +5,9 @@ use crate::grammar::validate_pct_encoded;
 
 /// A parse result together with the non-conformance found on the way.
 ///
-/// Returned by the `parse_with_warnings` constructors. `value` is what
-/// [`FromStr`](std::str::FromStr) returns for the same input.
+/// Returned by [`UriParse::parse_with_warnings`](crate::UriParse::parse_with_warnings).
+/// `value` is what [`UriParse::parse`](crate::UriParse::parse) returns for the
+/// same input.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Parsed<T> {

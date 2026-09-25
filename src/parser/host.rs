@@ -1,5 +1,4 @@
 use std::net::Ipv6Addr;
-use std::str::FromStr;
 
 use crate::error::ParseError;
 use crate::host::Host;
@@ -118,67 +117,31 @@ fn find_host_end(s: &str) -> usize {
     i
 }
 
-/// Parses a complete host, with no surrounding URI.
-///
-/// Accepts a hostname, a bare IPv4 or IPv6 address, and a bracketed IPv6
-/// reference. Bracketed IPv4 (`[192.0.2.1]`) is rejected: brackets are the
-/// `IPv6reference` production and the in-URI parser reads them the same way.
-///
-/// Anything a URI would put after the host (a port, parameters, headers) is
-/// dropped with a `TrailingContent` warning. Input with no readable host is the
-/// only error.
-///
-/// ```
-/// use sip_uri::{Host, WarningCode};
-///
-/// assert!("example.test".parse::<Host>().is_ok());
-/// assert!("192.0.2.1".parse::<Host>().is_ok());
-/// assert!("2001:db8::1".parse::<Host>().is_ok());
-/// assert!("[2001:db8::1]".parse::<Host>().is_ok());
-/// let parsed = Host::parse_with_warnings("example.test:5060").unwrap();
-/// assert_eq!(parsed.warnings[0].code, WarningCode::TrailingContent);
-/// assert!("[2001:db8::1".parse::<Host>().is_err());
-/// ```
-impl FromStr for Host {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::parse_with_warnings(s).map(|parsed| parsed.value)
-    }
-}
-
-impl Host {
-    /// Parse, rejecting any grammar breach as [`ParseError::NonConformant`].
-    pub fn parse_strict(input: &str) -> Result<Self, ParseError> {
-        Self::parse_with_warnings(input)?.into_strict()
-    }
-
-    /// Parse a complete host as [`FromStr`] does, reporting accepted grammar
-    /// breaches beside the value.
-    pub fn parse_with_warnings(s: &str) -> Result<Parsed<Self>, ParseError> {
-        let mut warnings = Warnings::new(s);
-        // A bare IPv6 has to be recognized up front: the URI parser stops the
-        // host at the first `:`, which is inside the address here.
-        if !s.starts_with('[') {
-            if let Ok(addr) = s.parse::<Ipv6Addr>() {
-                return Ok(warnings.finish(Host::IPv6(addr)));
-            }
+/// Parse a complete host, with no surrounding URI.
+pub(crate) fn parse(s: &str) -> Result<Parsed<Host>, ParseError> {
+    let mut warnings = Warnings::new(s);
+    // A bare IPv6 has to be recognized up front: the URI parser stops the
+    // host at the first `:`, which is inside the address here.
+    if !s.starts_with('[') {
+        if let Ok(addr) = s.parse::<Ipv6Addr>() {
+            return Ok(warnings.finish(Host::IPv6(addr)));
         }
-
-        let (host, consumed) = parse_from_uri(s, &mut warnings);
-        let Some(host) = host else {
-            return Err(ParseError::Empty);
-        };
-        if consumed != s.len() {
-            warnings.push(Component::Host, WarningCode::TrailingContent, s, consumed);
-        }
-        Ok(warnings.finish(host))
     }
+
+    let (host, consumed) = parse_from_uri(s, &mut warnings);
+    let Some(host) = host else {
+        return Err(ParseError::Empty);
+    };
+    if consumed != s.len() {
+        warnings.push(Component::Host, WarningCode::TrailingContent, s, consumed);
+    }
+    Ok(warnings.finish(host))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::UriParse;
     use std::net::Ipv4Addr;
 
     fn from_uri(s: &str) -> Option<(Host, usize)> {
@@ -228,17 +191,13 @@ mod tests {
     }
 
     #[test]
-    fn from_str_accepts_all_forms() {
+    fn parse_accepts_all_forms() {
         assert_eq!(
-            "example.test"
-                .parse::<Host>()
-                .unwrap(),
+            Host::parse("example.test").unwrap(),
             Host::Hostname("example.test".into())
         );
         assert_eq!(
-            "192.0.2.1"
-                .parse::<Host>()
-                .unwrap(),
+            Host::parse("192.0.2.1").unwrap(),
             Host::IPv4(Ipv4Addr::new(192, 0, 2, 1))
         );
         let v6 = Host::IPv6(
@@ -246,43 +205,26 @@ mod tests {
                 .parse::<Ipv6Addr>()
                 .unwrap(),
         );
-        assert_eq!(
-            "2001:db8::1"
-                .parse::<Host>()
-                .unwrap(),
-            v6
-        );
-        assert_eq!(
-            "[2001:db8::1]"
-                .parse::<Host>()
-                .unwrap(),
-            v6
-        );
+        assert_eq!(Host::parse("2001:db8::1").unwrap(), v6);
+        assert_eq!(Host::parse("[2001:db8::1]").unwrap(), v6);
     }
 
     #[test]
-    fn from_str_round_trips_both_renderers() {
+    fn parse_round_trips_both_renderers() {
         for input in ["example.test", "192.0.2.1", "2001:db8::1", "[2001:db8::1]"] {
-            let host: Host = input
-                .parse()
-                .unwrap();
+            let host = Host::parse(input).unwrap();
+            assert_eq!(Host::parse(&host.to_string()).unwrap(), host);
             assert_eq!(
-                host.to_string()
-                    .parse::<Host>()
-                    .unwrap(),
-                host
-            );
-            assert_eq!(
-                host.bare()
-                    .to_string()
-                    .parse::<Host>()
-                    .unwrap(),
+                Host::parse(
+                    &host
+                        .bare()
+                        .to_string()
+                )
+                .unwrap(),
                 host
             );
         }
-        let host: Host = "[2001:db8::1]"
-            .parse()
-            .unwrap();
+        let host = Host::parse("[2001:db8::1]").unwrap();
         assert_eq!(host.to_string(), "[2001:db8::1]");
         assert_eq!(
             host.bare()
@@ -292,12 +234,10 @@ mod tests {
     }
 
     #[test]
-    fn from_str_rejects_only_unreadable_hosts() {
+    fn parse_rejects_only_unreadable_hosts() {
         for input in ["[192.0.2.1]", "[2001:db8::1", ":5060", ""] {
             assert!(
-                input
-                    .parse::<Host>()
-                    .is_err(),
+                Host::parse(input).is_err(),
                 "expected rejection of {input:?}"
             );
         }

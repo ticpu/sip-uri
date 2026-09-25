@@ -7,18 +7,18 @@ RFC 8141 (URN) with hand-written parsing and per-component
 percent-encoding.
 
 ```rust
-use sip_uri::{SipUri, TelUri, UrnUri, Uri};
+use sip_uri::{SipUri, TelUri, UriParse, UrnUri};
 
-let uri: SipUri = "sip:alice@example.com;transport=tcp".parse().unwrap();
+let uri = SipUri::parse("sip:alice@example.com;transport=tcp").unwrap();
 assert_eq!(uri.user(), Some("alice"));
 assert_eq!(uri.host().unwrap().to_string(), "example.com");
 assert_eq!(uri.param("transport"), Some(Some("tcp")));
 
-let tel: TelUri = "tel:+15551234567;cpc=emergency".parse().unwrap();
+let tel = TelUri::parse("tel:+15551234567;cpc=emergency").unwrap();
 assert_eq!(tel.number(), Some("+15551234567"));
 assert!(tel.is_global());
 
-let urn: UrnUri = "urn:service:sos".parse().unwrap();
+let urn = UrnUri::parse("urn:service:sos").unwrap();
 assert_eq!(urn.nid(), Some("service"));
 assert_eq!(urn.nss(), Some("sos"));
 ```
@@ -44,7 +44,8 @@ sip-uri = "0.3"
 | `Redaction` | What `redacted()` masks when a URI is rendered for logs |
 | `Scheme` | `Sip` or `Sips` |
 
-The URI and host types implement `FromStr`, `Display`, `Debug`, `Clone`, `PartialEq`, `Eq` and `Hash`.
+The URI and host types implement `UriParse`, `Display`, `Debug`, `Clone`, `PartialEq`, `Eq` and `Hash`.
+Parsing is a trait, not `FromStr`, so bring `sip_uri::UriParse` into scope.
 Schemes and hosts are case-insensitive and stored lowercase; parameter and
 header lookup is case-insensitive. `PartialEq` is structural, not RFC 3261
 §19.1.4 URI equivalence: parameter order and name case count. `Display` emits
@@ -54,11 +55,13 @@ the canonical form, so `parse(display(parse(x))) == parse(x)`, though
 ## SipUri
 
 ```rust
-use sip_uri::{SipUri, Scheme};
+use sip_uri::{Scheme, SipUri, UriParse};
 
 // Full SIP URI with user-params, password, port, params, headers
-let uri: SipUri = "sips:+15551234567;cpc=emergency:secret@[2001:db8::1]:5061;user=phone?Subject=test"
-    .parse().unwrap();
+let uri = SipUri::parse(
+    "sips:+15551234567;cpc=emergency:secret@[2001:db8::1]:5061;user=phone?Subject=test",
+)
+.unwrap();
 
 assert_eq!(uri.scheme(), Some(Scheme::Sips));
 assert_eq!(uri.user(), Some("+15551234567"));
@@ -76,11 +79,10 @@ RFC 3966. Parameters within the userinfo (before `@`) are split from the
 user part and exposed via `user_params()`:
 
 ```rust
-use sip_uri::SipUri;
+use sip_uri::{SipUri, UriParse};
 
 // NG911 pattern: user-params carry tel: semantics inside a SIP URI
-let uri: SipUri = "sip:+15551234567;cpc=emergency;oli=0@198.51.100.1;user=phone"
-    .parse().unwrap();
+let uri = SipUri::parse("sip:+15551234567;cpc=emergency;oli=0@198.51.100.1;user=phone").unwrap();
 
 assert_eq!(uri.user(), Some("+15551234567"));
 assert_eq!(uri.user_params().len(), 2);
@@ -108,16 +110,17 @@ assert_eq!(uri.to_string(), "sips:+15551234567@198.51.100.1:5061;transport=tcp")
 for URI position; `bare()` never brackets.
 
 ```rust
-use sip_uri::Host;
+use sip_uri::{Host, UriParse};
 
-let host: Host = "[2001:db8::1]".parse().unwrap();
+let host = Host::parse("[2001:db8::1]").unwrap();
 assert_eq!(host.to_string(), "[2001:db8::1]");
 assert_eq!(host.bare().to_string(), "2001:db8::1");
 
-// Hostnames, bare IPv4 and bare IPv6 parse too; a trailing port does not.
-assert!("example.com".parse::<Host>().is_ok());
-assert!("2001:db8::1".parse::<Host>().is_ok());
-assert!("example.com:5060".parse::<Host>().is_err());
+// Hostnames, bare IPv4 and bare IPv6 parse too; a trailing port is dropped
+// with a warning.
+assert!(Host::parse("example.com").is_ok());
+assert!(Host::parse("2001:db8::1").is_ok());
+assert!(Host::parse_strict("example.com:5060").is_err());
 ```
 
 Brackets are the `IPv6reference` production, so `[198.51.100.1]` is rejected.
@@ -125,15 +128,15 @@ Brackets are the `IPv6reference` production, so `[198.51.100.1]` is rejected.
 ## TelUri
 
 ```rust
-use sip_uri::TelUri;
+use sip_uri::{TelUri, UriParse};
 
-let uri: TelUri = "tel:+15551234567;cpc=emergency;oli=0".parse().unwrap();
+let uri = TelUri::parse("tel:+15551234567;cpc=emergency;oli=0").unwrap();
 assert_eq!(uri.number(), Some("+15551234567"));
 assert!(uri.is_global());
 assert_eq!(uri.param("cpc"), Some(Some("emergency")));
 
 // Local numbers (no + prefix)
-let local: TelUri = "tel:911".parse().unwrap();
+let local = TelUri::parse("tel:911").unwrap();
 assert!(!local.is_global());
 ```
 
@@ -143,24 +146,24 @@ URN parsing per RFC 8141. Used in SIP for NG911 service identifiers,
 3GPP IMS service types, GSMA IMEI, and NENA call/incident tracking.
 
 ```rust
-use sip_uri::UrnUri;
+use sip_uri::{UriParse, UrnUri};
 
 // NG911 emergency service identifier
-let urn: UrnUri = "urn:service:sos.fire".parse().unwrap();
+let urn = UrnUri::parse("urn:service:sos.fire").unwrap();
 assert_eq!(urn.nid(), Some("service"));
 assert_eq!(urn.nss(), Some("sos.fire"));
 
 // NENA call tracking identifier
-let urn: UrnUri = "urn:nena:callid:abc123:host.example.com".parse().unwrap();
+let urn = UrnUri::parse("urn:nena:callid:abc123:host.example.com").unwrap();
 assert_eq!(urn.nid(), Some("nena"));
 assert_eq!(urn.nss(), Some("callid:abc123:host.example.com"));
 
 // 3GPP IMS service
-let urn: UrnUri = "urn:urn-7:3gpp-service.ims.icsi.mmtel".parse().unwrap();
+let urn = UrnUri::parse("urn:urn-7:3gpp-service.ims.icsi.mmtel").unwrap();
 assert_eq!(urn.nid(), Some("urn-7"));
 
 // Optional RFC 8141 components (resolution, query, fragment)
-let urn: UrnUri = "urn:example:resource?+resolve?=query#section".parse().unwrap();
+let urn = UrnUri::parse("urn:example:resource?+resolve?=query#section").unwrap();
 assert_eq!(urn.r_component(), Some("resolve"));
 assert_eq!(urn.q_component(), Some("query"));
 assert_eq!(urn.f_component(), Some("section"));
@@ -195,10 +198,10 @@ Every component holds one canonical form, whether parsed or built:
   FreeSWITCH's `sip_req_user`
 
 ```rust
-use sip_uri::{decode_user, SipUri};
+use sip_uri::{decode_user, SipUri, UriParse};
 
 // Percent-encoded quotes in user-part are preserved
-let uri: SipUri = r#"sip:%22foo%22@example.com"#.parse().unwrap();
+let uri = SipUri::parse(r#"sip:%22foo%22@example.com"#).unwrap();
 assert_eq!(uri.user(), Some(r#"%22foo%22"#));
 
 // Full decode of a bare user part
@@ -213,11 +216,11 @@ typed `ParseWarning` (component, code, byte position, whether the value
 survived). A missing or unreadable scheme, host, port, number, NID or NSS is
 `None` with a warning. The only errors are empty input and a scheme that
 belongs to another type (`tel:` parsed as `SipUri`); `Uri` keeps anything else
-as `Other`. `FromStr` accepts exactly the same input and drops the warnings.
+as `Other`. `parse` accepts exactly the same input and drops the warnings.
 Warnings never quote the input, since a user part is a caller number.
 
 ```rust
-use sip_uri::{Component, SipUri, WarningCode};
+use sip_uri::{Component, SipUri, UriParse, WarningCode};
 
 let parsed = SipUri::parse_with_warnings("sip:+15551234567@example.com:+5060").unwrap();
 assert_eq!(parsed.value.port(), Some(5060));
@@ -236,9 +239,9 @@ through a `Redaction`: by default the whole userinfo, or a tel: number, becomes
 `***`, and the caller relaxes that per deployment policy.
 
 ```rust
-use sip_uri::{Redaction, SipUri, UserMask};
+use sip_uri::{Redaction, SipUri, UriParse, UserMask};
 
-let uri: SipUri = "sip:+15551234567:pw@example.com".parse().unwrap();
+let uri = SipUri::parse("sip:+15551234567:pw@example.com").unwrap();
 assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com");
 let keep4 = Redaction::default().user(UserMask::KeepLast(4)).drop_headers();
 assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
@@ -263,6 +266,10 @@ assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
 | `%3B` in a user part, `%40` in a URI param decoded | kept escaped, so Display round-trips |
 | a byte outside a component's grammar kept literal | escaped as `%XX`, with a warning |
 | `"*".parse::<Uri>()` is `Err` | `Uri::Other` with a `Wildcard` warning |
+| `FromStr`: `s.parse::<SipUri>()` | `UriParse`: `SipUri::parse(s)`, with `sip_uri::UriParse` in scope |
+| inherent `parse_with_warnings`, `parse_strict` | the same names on `UriParse` |
+| `SipUri`, `TelUri`, `UrnUri`, `Uri` without `Hash` | `Hash`, consistent with `Eq` |
+| no parts type | `SipUriParts`, `TelUriParts`, `UrnUriParts` through `From`, and `into_parts()` |
 
 Code that used `let Ok(uri) = s.parse() else { reject }` to refuse malformed
 input now accepts it; use `parse_strict`, or check `parse_with_warnings`'s

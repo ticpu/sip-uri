@@ -1,6 +1,6 @@
 use sip_uri::{
-    Host, Hostname, OtherUri, Scheme, SipUri, SipUriParts, TelUri, TelUriParts, Uri, UrnUri,
-    UrnUriParts, WarningCode,
+    Host, Hostname, OtherUri, Scheme, SipUri, SipUriParts, TelUri, TelUriParts, Uri, UriParse,
+    UrnUri, UrnUriParts, WarningCode,
 };
 use std::net::{Ipv4Addr, Ipv6Addr};
 
@@ -10,9 +10,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 #[test]
 fn sofia_basic_sip() {
-    let uri: SipUri = "sip:joe@example.com"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:joe@example.com").unwrap();
     assert_eq!(uri.scheme(), Some(Scheme::Sip));
     assert_eq!(uri.user(), Some("joe"));
     assert_eq!(uri.host(), Some(&Host::Hostname("example.com".into())));
@@ -22,9 +20,7 @@ fn sofia_basic_sip() {
 
 #[test]
 fn sofia_minimal() {
-    let uri: SipUri = "sip:u@h"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:u@h").unwrap();
     assert_eq!(uri.user(), Some("u"));
     assert_eq!(uri.host(), Some(&Host::Hostname("h".into())));
     assert_eq!(uri.to_string(), "sip:u@h");
@@ -32,9 +28,7 @@ fn sofia_minimal() {
 
 #[test]
 fn sofia_host_only() {
-    let uri: SipUri = "sip:test.host"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:test.host").unwrap();
     assert_eq!(uri.user(), None);
     assert_eq!(uri.host(), Some(&Host::Hostname("test.host".into())));
     assert_eq!(uri.to_string(), "sip:test.host");
@@ -42,9 +36,7 @@ fn sofia_host_only() {
 
 #[test]
 fn sofia_ipv4() {
-    let uri: SipUri = "sip:172.21.55.55"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:172.21.55.55").unwrap();
     assert_eq!(
         uri.host(),
         Some(&Host::IPv4(Ipv4Addr::new(172, 21, 55, 55)))
@@ -53,9 +45,7 @@ fn sofia_ipv4() {
 
 #[test]
 fn sofia_ipv4_with_port() {
-    let uri: SipUri = "sip:172.21.55.55:5060"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:172.21.55.55:5060").unwrap();
     assert_eq!(
         uri.host(),
         Some(&Host::IPv4(Ipv4Addr::new(172, 21, 55, 55)))
@@ -65,9 +55,7 @@ fn sofia_ipv4_with_port() {
 
 #[test]
 fn sofia_full_sips() {
-    let uri: SipUri = "sips:user:pass@host:32;param=1?From=foo@bar&To=bar@baz"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sips:user:pass@host:32;param=1?From=foo@bar&To=bar@baz").unwrap();
     assert_eq!(uri.scheme(), Some(Scheme::Sips));
     assert_eq!(uri.user(), Some("user"));
     assert_eq!(uri.password(), Some("pass"));
@@ -80,9 +68,7 @@ fn sofia_full_sips() {
 
 #[test]
 fn sofia_case_insensitive_scheme() {
-    let uri: SipUri = "SIP:test@127.0.0.1:55"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("SIP:test@127.0.0.1:55").unwrap();
     assert_eq!(uri.scheme(), Some(Scheme::Sip));
     assert_eq!(uri.user(), Some("test"));
     assert_eq!(uri.port(), Some(55));
@@ -91,18 +77,14 @@ fn sofia_case_insensitive_scheme() {
 #[test]
 fn sofia_empty_port() {
     // Empty port is valid per sofia-sip
-    let uri: SipUri = "SIP:test@127.0.0.1:"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("SIP:test@127.0.0.1:").unwrap();
     assert_eq!(uri.scheme(), Some(Scheme::Sip));
     assert_eq!(uri.port(), None);
 }
 
 #[test]
 fn sofia_percent_encoded_quotes_in_user() {
-    let uri: SipUri = "sip:%22foo%22@172.21.55.55:5060"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:%22foo%22@172.21.55.55:5060").unwrap();
     // %22 is double-quote, not unreserved, stays encoded
     assert_eq!(uri.user(), Some("%22foo%22"));
     assert_eq!(
@@ -113,9 +95,7 @@ fn sofia_percent_encoded_quotes_in_user() {
 
 #[test]
 fn sofia_user_with_slash_semicolon_password() {
-    let uri: SipUri = "sip:user/path;tel-param:pass@host:32;param=1%3d%3d1"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:user/path;tel-param:pass@host:32;param=1%3d%3d1").unwrap();
     assert_eq!(uri.user(), Some("user/path"));
     assert_eq!(uri.user_params(), &[("tel-param".into(), None)]);
     assert_eq!(uri.password(), Some("pass"));
@@ -127,9 +107,7 @@ fn sofia_user_with_slash_semicolon_password() {
 
 #[test]
 fn sofia_reserved_chars_in_user_ipv6() {
-    let uri: SipUri = "sip:&=+$,;?/:&=+$,@[::1]:56001;param=+$,/:@&"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:&=+$,;?/:&=+$,@[::1]:56001;param=+$,/:@&").unwrap();
     assert_eq!(uri.user(), Some("&=+$,"));
     assert_eq!(uri.host(), Some(&Host::IPv6(Ipv6Addr::LOCALHOST)));
     assert_eq!(uri.port(), Some(56001));
@@ -138,9 +116,7 @@ fn sofia_reserved_chars_in_user_ipv6() {
 #[test]
 fn sofia_hash_in_user() {
     // Sofia-sip compatibility: phones put unescaped # in user
-    let uri: SipUri = "SIP:#**00**#;foo=/bar@127.0.0.1"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("SIP:#**00**#;foo=/bar@127.0.0.1").unwrap();
     assert_eq!(uri.user(), Some("#**00**#"));
     assert_eq!(uri.user_params(), &[("foo".into(), Some("/bar".into()))]);
     assert_eq!(uri.host(), Some(&Host::IPv4(Ipv4Addr::new(127, 0, 0, 1))));
@@ -148,18 +124,14 @@ fn sofia_hash_in_user() {
 
 #[test]
 fn sofia_transport_and_maddr_params() {
-    let uri: SipUri = "sip:u:p@host:5060;maddr=127.0.0.1;transport=tcp"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:u:p@host:5060;maddr=127.0.0.1;transport=tcp").unwrap();
     assert_eq!(uri.param("transport"), Some(Some("tcp")));
     assert_eq!(uri.param("maddr"), Some(Some("127.0.0.1")));
 }
 
 #[test]
 fn sofia_param_without_value() {
-    let uri: SipUri = "sip:u:p@host:5060;user=phone;ttl=1;isfocus"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:u:p@host:5060;user=phone;ttl=1;isfocus").unwrap();
     assert_eq!(uri.param("user"), Some(Some("phone")));
     assert_eq!(uri.param("ttl"), Some(Some("1")));
     assert_eq!(uri.param("isfocus"), Some(None));
@@ -171,24 +143,12 @@ fn sofia_param_without_value() {
 
 #[test]
 fn only_empty_input_and_foreign_schemes_fail() {
-    assert!(""
-        .parse::<SipUri>()
-        .is_err());
-    assert!("http://example.com"
-        .parse::<SipUri>()
-        .is_err());
-    assert!("tel:+15551234567"
-        .parse::<SipUri>()
-        .is_err());
-    assert!("sip:alice@example.com"
-        .parse::<TelUri>()
-        .is_err());
-    assert!("http:service:sos"
-        .parse::<UrnUri>()
-        .is_err());
-    assert!(""
-        .parse::<Uri>()
-        .is_err());
+    assert!(SipUri::parse("").is_err());
+    assert!(SipUri::parse("http://example.com").is_err());
+    assert!(SipUri::parse("tel:+15551234567").is_err());
+    assert!(TelUri::parse("sip:alice@example.com").is_err());
+    assert!(UrnUri::parse("http:service:sos").is_err());
+    assert!(Uri::parse("").is_err());
 }
 
 // ========================================================================
@@ -219,11 +179,12 @@ fn nonconformant_sip_uris_parse_with_warnings() {
             "{input}: expected {code:?} in {:?}",
             parsed.warnings
         );
-        let reparsed: SipUri = parsed
-            .value
-            .to_string()
-            .parse()
-            .unwrap();
+        let reparsed = SipUri::parse(
+            &parsed
+                .value
+                .to_string(),
+        )
+        .unwrap();
         assert_eq!(reparsed, parsed.value, "{input}");
     }
 }
@@ -246,9 +207,7 @@ fn wildcard_is_other_with_a_warning() {
 
 #[test]
 fn sofia_tel_basic() {
-    let uri: TelUri = "tel:+12345678"
-        .parse()
-        .unwrap();
+    let uri = TelUri::parse("tel:+12345678").unwrap();
     assert_eq!(uri.number(), Some("+12345678"));
     assert!(uri.is_global());
     assert!(uri
@@ -259,9 +218,7 @@ fn sofia_tel_basic() {
 
 #[test]
 fn sofia_tel_with_params() {
-    let uri: TelUri = "tel:+12345678;param=1;param=2"
-        .parse()
-        .unwrap();
+    let uri = TelUri::parse("tel:+12345678;param=1;param=2").unwrap();
     assert_eq!(uri.number(), Some("+12345678"));
     assert_eq!(
         uri.params()
@@ -276,9 +233,8 @@ fn sofia_tel_with_params() {
 
 #[test]
 fn ng911_user_params_ipv4_user_phone() {
-    let sip: SipUri = "sip:+15551234567;cpc=emergency;oli=0@198.51.100.1;user=phone"
-        .parse()
-        .unwrap();
+    let sip =
+        SipUri::parse("sip:+15551234567;cpc=emergency;oli=0@198.51.100.1;user=phone").unwrap();
     assert_eq!(sip.user(), Some("+15551234567"));
     assert_eq!(
         sip.user_params(),
@@ -296,18 +252,14 @@ fn ng911_user_params_ipv4_user_phone() {
 
 #[test]
 fn ng911_participantid() {
-    let uri: SipUri = "sip:+15551234567@sip.example.com;participantid=abc123"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:+15551234567@sip.example.com;participantid=abc123").unwrap();
     assert_eq!(uri.user(), Some("+15551234567"));
     assert_eq!(uri.param("participantid"), Some(Some("abc123")));
 }
 
 #[test]
 fn ng911_participantid_no_user_part() {
-    let uri: SipUri = "sip:sip.bcf.qc.core.ng.example.com;participantid=2"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:sip.bcf.qc.core.ng.example.com;participantid=2").unwrap();
     assert_eq!(uri.user(), None);
     assert_eq!(
         uri.host()
@@ -323,9 +275,8 @@ fn ng911_participantid_no_user_part() {
 
 #[test]
 fn ng911_participantid_no_user_part_extra_params() {
-    let uri: SipUri = "sip:sip.bcf.qc.core.ng.example.com;participantid=2;user=phone"
-        .parse()
-        .unwrap();
+    let uri =
+        SipUri::parse("sip:sip.bcf.qc.core.ng.example.com;participantid=2;user=phone").unwrap();
     assert_eq!(uri.user(), None);
     assert_eq!(uri.param("participantid"), Some(Some("2")));
     assert_eq!(uri.param("user"), Some(Some("phone")));
@@ -333,9 +284,8 @@ fn ng911_participantid_no_user_part_extra_params() {
 
 #[test]
 fn ng911_participantid_non_word_value() {
-    let uri: SipUri = "sip:sip.bcf.qc.core.ng.example.com;participantid=9f8e7d6c-1234"
-        .parse()
-        .unwrap();
+    let uri =
+        SipUri::parse("sip:sip.bcf.qc.core.ng.example.com;participantid=9f8e7d6c-1234").unwrap();
     assert_eq!(uri.param("participantid"), Some(Some("9f8e7d6c-1234")));
 }
 
@@ -344,10 +294,10 @@ fn ng911_participantid_non_word_value() {
 // locally, the 404 only shows up on the wire.
 #[test]
 fn ng911_participantid_host_reused_as_user() {
-    let uri: SipUri =
-        "sip:sip.bcf.qc.core.ng.example.com;participantid=2@sip.bcf.qc.core.ng.example.com"
-            .parse()
-            .unwrap();
+    let uri = SipUri::parse(
+        "sip:sip.bcf.qc.core.ng.example.com;participantid=2@sip.bcf.qc.core.ng.example.com",
+    )
+    .unwrap();
     assert_eq!(uri.user(), Some("sip.bcf.qc.core.ng.example.com"));
     assert_eq!(
         uri.user_params(),
@@ -359,18 +309,14 @@ fn ng911_participantid_host_reused_as_user() {
 
 #[test]
 fn ng911_user_phone() {
-    let sip: SipUri = "sip:1305@pbx.example.com;user=phone"
-        .parse()
-        .unwrap();
+    let sip = SipUri::parse("sip:1305@pbx.example.com;user=phone").unwrap();
     assert_eq!(sip.user(), Some("1305"));
     assert_eq!(sip.param("user"), Some(Some("phone")));
 }
 
 #[test]
 fn ng911_ipv6_with_port() {
-    let uri: SipUri = "sip:1411@[2001:db8::1]:5061;user=phone"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:1411@[2001:db8::1]:5061;user=phone").unwrap();
     assert_eq!(uri.user(), Some("1411"));
     assert_eq!(
         uri.host()
@@ -387,9 +333,7 @@ fn ng911_ipv6_with_port() {
 
 #[test]
 fn ng911_ipv6_with_password() {
-    let uri: SipUri = "sip:1411:secret@[2001:db8::1]:5061;user=phone"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:1411:secret@[2001:db8::1]:5061;user=phone").unwrap();
     assert_eq!(uri.user(), Some("1411"));
     assert_eq!(uri.password(), Some("secret"));
     assert_eq!(
@@ -406,18 +350,14 @@ fn ng911_ipv6_with_password() {
 
 #[test]
 fn ng911_tel_global() {
-    let uri: TelUri = "tel:+15551234567"
-        .parse()
-        .unwrap();
+    let uri = TelUri::parse("tel:+15551234567").unwrap();
     assert_eq!(uri.number(), Some("+15551234567"));
     assert!(uri.is_global());
 }
 
 #[test]
 fn ng911_session_id() {
-    let sip: SipUri = "sip:session-id@focus.example.com"
-        .parse()
-        .unwrap();
+    let sip = SipUri::parse("sip:session-id@focus.example.com").unwrap();
     assert_eq!(sip.user(), Some("session-id"));
     assert_eq!(
         sip.host(),
@@ -427,9 +367,7 @@ fn ng911_session_id() {
 
 #[test]
 fn ng911_ipv6_without_port() {
-    let sip: SipUri = "sip:+15551234567@[2001:db8::8];user=phone"
-        .parse()
-        .unwrap();
+    let sip = SipUri::parse("sip:+15551234567@[2001:db8::8];user=phone").unwrap();
     assert_eq!(sip.user(), Some("+15551234567"));
     assert_eq!(
         sip.host()
@@ -444,18 +382,14 @@ fn ng911_ipv6_without_port() {
 
 #[test]
 fn ng911_tel_with_cpc_emergency() {
-    let tel: TelUri = "tel:+15551234567;cpc=emergency"
-        .parse()
-        .unwrap();
+    let tel = TelUri::parse("tel:+15551234567;cpc=emergency").unwrap();
     assert_eq!(tel.number(), Some("+15551234567"));
     assert_eq!(tel.param("cpc"), Some(Some("emergency")));
 }
 
 #[test]
 fn ng911_tel_param_without_value() {
-    let tel: TelUri = "tel:+15551234567;cpc=emergency;oli"
-        .parse()
-        .unwrap();
+    let tel = TelUri::parse("tel:+15551234567;cpc=emergency;oli").unwrap();
     assert_eq!(tel.param("cpc"), Some(Some("emergency")));
     assert_eq!(tel.param("oli"), Some(None));
 }
@@ -465,13 +399,9 @@ fn ng911_tel_param_without_value() {
 // ========================================================================
 
 fn roundtrip_sip(input: &str) {
-    let uri1: SipUri = input
-        .parse()
-        .unwrap();
+    let uri1 = SipUri::parse(input).unwrap();
     let displayed = uri1.to_string();
-    let uri2: SipUri = displayed
-        .parse()
-        .unwrap();
+    let uri2 = SipUri::parse(&displayed).unwrap();
     assert_eq!(
         uri1, uri2,
         "roundtrip failed for '{input}' -> '{displayed}'"
@@ -479,13 +409,9 @@ fn roundtrip_sip(input: &str) {
 }
 
 fn roundtrip_tel(input: &str) {
-    let uri1: TelUri = input
-        .parse()
-        .unwrap();
+    let uri1 = TelUri::parse(input).unwrap();
     let displayed = uri1.to_string();
-    let uri2: TelUri = displayed
-        .parse()
-        .unwrap();
+    let uri2 = TelUri::parse(&displayed).unwrap();
     assert_eq!(
         uri1, uri2,
         "roundtrip failed for '{input}' -> '{displayed}'"
@@ -493,13 +419,9 @@ fn roundtrip_tel(input: &str) {
 }
 
 fn roundtrip_uri(input: &str) {
-    let uri1: Uri = input
-        .parse()
-        .unwrap();
+    let uri1 = Uri::parse(input).unwrap();
     let displayed = uri1.to_string();
-    let uri2: Uri = displayed
-        .parse()
-        .unwrap();
+    let uri2 = Uri::parse(&displayed).unwrap();
     assert_eq!(
         uri1, uri2,
         "roundtrip failed for '{input}' -> '{displayed}'"
@@ -557,9 +479,9 @@ fn roundtrip_uri_tel_params() {
 
 #[test]
 fn ng911_with_params() {
-    let uri: SipUri = "sip:+15551234567@sip.bcf.ng911.example.com;participantid=abc123def456"
-        .parse()
-        .unwrap();
+    let uri =
+        SipUri::parse("sip:+15551234567@sip.bcf.ng911.example.com;participantid=abc123def456")
+            .unwrap();
     assert_eq!(uri.scheme(), Some(Scheme::Sip));
     assert_eq!(uri.user(), Some("+15551234567"));
     assert_eq!(
@@ -576,9 +498,8 @@ fn ng911_with_params() {
 
 #[test]
 fn ng911_multiple_userparams() {
-    let uri: SipUri = "sip:+15559876543;cpc=emergency;oli=0@198.51.100.1;user=phone"
-        .parse()
-        .unwrap();
+    let uri =
+        SipUri::parse("sip:+15559876543;cpc=emergency;oli=0@198.51.100.1;user=phone").unwrap();
     assert_eq!(uri.user(), Some("+15559876543"));
     assert_eq!(
         uri.host(),
@@ -599,9 +520,7 @@ fn ng911_multiple_userparams() {
 
 #[test]
 fn ng911_multiple_params_and_headers() {
-    let uri: SipUri =
-        "sip:biloxi.com;transport=tcp;method=REGISTER?to=sip:bob%40biloxi.com&from=user%40example.org"
-            .parse()
+    let uri = SipUri::parse("sip:biloxi.com;transport=tcp;method=REGISTER?to=sip:bob%40biloxi.com&from=user%40example.org")
             .unwrap();
     assert_eq!(uri.user(), None);
     assert_eq!(uri.host(), Some(&Host::Hostname("biloxi.com".into())));
@@ -624,9 +543,7 @@ fn ng911_multiple_params_and_headers() {
 
 #[test]
 fn ng911_ipv4_with_port() {
-    let uri: SipUri = "sip:1411@10.2.2.2:5061;user=phone"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:1411@10.2.2.2:5061;user=phone").unwrap();
     assert_eq!(uri.user(), Some("1411"));
     assert_eq!(uri.host(), Some(&Host::IPv4(Ipv4Addr::new(10, 2, 2, 2))));
     assert_eq!(uri.port(), Some(5061));
@@ -635,27 +552,21 @@ fn ng911_ipv4_with_port() {
 
 #[test]
 fn ng911_empty_param_value() {
-    let uri: SipUri = "sip:1411@1.2.3.4;key1=?key2="
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:1411@1.2.3.4;key1=?key2=").unwrap();
     assert_eq!(uri.params(), &[("key1".into(), Some("".into()))]);
     assert_eq!(uri.headers(), &[("key2".into(), "".into())]);
 }
 
 #[test]
 fn ng911_param_without_value_then_header() {
-    let uri: SipUri = "sip:1411@1.2.3.4;key1?key2="
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:1411@1.2.3.4;key1?key2=").unwrap();
     assert_eq!(uri.params(), &[("key1".into(), None)]);
     assert_eq!(uri.headers(), &[("key2".into(), "".into())]);
 }
 
 #[test]
 fn ng911_user_param_cpc() {
-    let uri: SipUri = "sip:5551230001;cpc=emergency@198.51.100.2"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:5551230001;cpc=emergency@198.51.100.2").unwrap();
     assert_eq!(uri.user(), Some("5551230001"));
     assert_eq!(
         uri.host(),
@@ -674,17 +585,13 @@ fn ng911_user_param_cpc() {
 
 #[test]
 fn ng911_tel_without_plus() {
-    let tel: TelUri = "tel:15551234567"
-        .parse()
-        .unwrap();
+    let tel = TelUri::parse("tel:15551234567").unwrap();
     assert_eq!(tel.number(), Some("15551234567"));
 }
 
 #[test]
 fn ng911_tel_with_params() {
-    let tel: TelUri = "tel:+15559871234;cpc=emergency"
-        .parse()
-        .unwrap();
+    let tel = TelUri::parse("tel:+15559871234;cpc=emergency").unwrap();
     assert_eq!(tel.number(), Some("+15559871234"));
     assert_eq!(tel.param("cpc"), Some(Some("emergency")));
 }
@@ -696,9 +603,9 @@ fn ng911_tel_with_params() {
 #[test]
 fn sofia_canonize_method_param() {
     // method=%4D%45%53%53%41%47%45 = METHOD (all unreserved, decode)
-    let uri: SipUri = "sip:pekka.pessi@nokia.com;method=%4D%45%53%53%41%47%45?body=CANNED%20MSG"
-        .parse()
-        .unwrap();
+    let uri =
+        SipUri::parse("sip:pekka.pessi@nokia.com;method=%4D%45%53%53%41%47%45?body=CANNED%20MSG")
+            .unwrap();
     assert_eq!(uri.user(), Some("pekka.pessi"));
     assert_eq!(uri.param("method"), Some(Some("MESSAGE")));
     // %20 is space, not unreserved, stays encoded in headers
@@ -707,9 +614,7 @@ fn sofia_canonize_method_param() {
 
 #[test]
 fn sofia_full_with_fragment() {
-    let uri: SipUri = "sip:user:pass@host:32;param=1?From=foo@bar&To=bar@baz#unf"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:user:pass@host:32;param=1?From=foo@bar&To=bar@baz#unf").unwrap();
     assert_eq!(uri.user(), Some("user"));
     assert_eq!(uri.password(), Some("pass"));
     assert_eq!(uri.host(), Some(&Host::Hostname("host".into())));
@@ -726,9 +631,7 @@ fn sofia_full_with_fragment() {
 
 #[test]
 fn sip_fragment_after_params() {
-    let uri: SipUri = "sip:alice@example.com;transport=tcp#section"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:alice@example.com;transport=tcp#section").unwrap();
     assert_eq!(uri.param("transport"), Some(Some("tcp")));
     assert_eq!(uri.fragment(), Some("section"));
     assert_eq!(
@@ -739,26 +642,20 @@ fn sip_fragment_after_params() {
 
 #[test]
 fn sip_fragment_after_host() {
-    let uri: SipUri = "sip:example.com#frag"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:example.com#frag").unwrap();
     assert_eq!(uri.host(), Some(&Host::Hostname("example.com".into())));
     assert_eq!(uri.fragment(), Some("frag"));
 }
 
 #[test]
 fn sip_no_fragment() {
-    let uri: SipUri = "sip:alice@example.com"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:alice@example.com").unwrap();
     assert_eq!(uri.fragment(), None);
 }
 
 #[test]
 fn tel_fragment_after_params() {
-    let uri: TelUri = "tel:+15551234567;cpc=emergency#context"
-        .parse()
-        .unwrap();
+    let uri = TelUri::parse("tel:+15551234567;cpc=emergency#context").unwrap();
     assert_eq!(uri.number(), Some("+15551234567"));
     assert_eq!(uri.param("cpc"), Some(Some("emergency")));
     assert_eq!(uri.fragment(), Some("context"));
@@ -768,9 +665,7 @@ fn tel_fragment_after_params() {
 #[test]
 fn tel_hash_in_number_not_fragment() {
     // # in tel number is a phonedigit-hex, not a fragment
-    let uri: TelUri = "tel:*67#"
-        .parse()
-        .unwrap();
+    let uri = TelUri::parse("tel:*67#").unwrap();
     assert_eq!(uri.number(), Some("*67#"));
     assert_eq!(uri.fragment(), None);
 }
@@ -778,9 +673,7 @@ fn tel_hash_in_number_not_fragment() {
 #[test]
 fn sofia_double_semicolon_in_params() {
     // Empty params between semicolons should be ignored
-    let uri: SipUri = "sip:u:p@host;user=phone;;"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:u:p@host;user=phone;;").unwrap();
     assert_eq!(uri.param("user"), Some(Some("phone")));
     // The empty params between ;; are ignored
     assert_eq!(
@@ -796,9 +689,7 @@ fn sofia_double_semicolon_in_params() {
 
 #[test]
 fn canonical_scheme_lowercase() {
-    let uri: SipUri = "SIP:test@127.0.0.1:55"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("SIP:test@127.0.0.1:55").unwrap();
     assert!(uri
         .to_string()
         .starts_with("sip:"));
@@ -806,17 +697,13 @@ fn canonical_scheme_lowercase() {
 
 #[test]
 fn canonical_host_lowercase() {
-    let uri: SipUri = "sip:user@EXAMPLE.COM"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:user@EXAMPLE.COM").unwrap();
     assert_eq!(uri.host(), Some(&Host::Hostname("example.com".into())));
 }
 
 #[test]
 fn canonical_percent_encoding_uppercase() {
-    let uri: SipUri = "sip:user@host;param=1%3d%3d1"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:user@host;param=1%3d%3d1").unwrap();
     // %3d normalized to uppercase %3D
     assert!(uri
         .to_string()
@@ -826,9 +713,7 @@ fn canonical_percent_encoding_uppercase() {
 #[test]
 fn canonical_decode_unreserved_in_user() {
     // %2E is '.', unreserved, should be decoded in user part
-    let uri: SipUri = "sip:pekka%2Epessi@nokia.com"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:pekka%2Epessi@nokia.com").unwrap();
     assert_eq!(uri.user(), Some("pekka.pessi"));
     assert_eq!(uri.host(), Some(&Host::Hostname("nokia.com".into())));
 }
@@ -836,9 +721,7 @@ fn canonical_decode_unreserved_in_user() {
 #[test]
 fn canonical_percent_encoded_host() {
     // Percent-encoded hostname: %2E is '.', decode unreserved in host
-    let uri: SipUri = "sip:user@nokia%2Ecom"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:user@nokia%2Ecom").unwrap();
     assert_eq!(uri.host(), Some(&Host::Hostname("nokia.com".into())));
 }
 
@@ -883,9 +766,7 @@ fn builder_tel_uri() {
 
 #[test]
 fn sip_uri_no_user_ipv6() {
-    let uri: SipUri = "sip:[::1]:5060"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:[::1]:5060").unwrap();
     assert_eq!(uri.user(), None);
     assert_eq!(uri.host(), Some(&Host::IPv6(Ipv6Addr::LOCALHOST)));
     assert_eq!(uri.port(), Some(5060));
@@ -893,36 +774,28 @@ fn sip_uri_no_user_ipv6() {
 
 #[test]
 fn sip_uri_headers_only() {
-    let uri: SipUri = "sip:host?Subject=test"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:host?Subject=test").unwrap();
     assert_eq!(uri.user(), None);
     assert_eq!(uri.header("Subject"), Some("test"));
 }
 
 #[test]
 fn tel_local_with_star_hash() {
-    let uri: TelUri = "tel:*67"
-        .parse()
-        .unwrap();
+    let uri = TelUri::parse("tel:*67").unwrap();
     assert_eq!(uri.number(), Some("*67"));
     assert!(!uri.is_global());
 }
 
 #[test]
 fn tel_visual_separators_preserved() {
-    let uri: TelUri = "tel:+1.245.623-57"
-        .parse()
-        .unwrap();
+    let uri = TelUri::parse("tel:+1.245.623-57").unwrap();
     assert_eq!(uri.number(), Some("+1.245.623-57"));
     assert_eq!(uri.to_string(), "tel:+1.245.623-57");
 }
 
 #[test]
 fn uri_dispatch_preserves_type() {
-    let sip: Uri = "sip:alice@example.com"
-        .parse()
-        .unwrap();
+    let sip = Uri::parse("sip:alice@example.com").unwrap();
     assert!(sip
         .as_sip()
         .is_some());
@@ -930,9 +803,7 @@ fn uri_dispatch_preserves_type() {
         .as_tel()
         .is_none());
 
-    let tel: Uri = "tel:+15551234567"
-        .parse()
-        .unwrap();
+    let tel = Uri::parse("tel:+15551234567").unwrap();
     assert!(tel
         .as_tel()
         .is_some());
@@ -943,9 +814,7 @@ fn uri_dispatch_preserves_type() {
 
 #[test]
 fn param_case_insensitive_lookup() {
-    let uri: SipUri = "sip:host;Transport=TCP;User=phone"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:host;Transport=TCP;User=phone").unwrap();
     assert_eq!(uri.param("transport"), Some(Some("TCP")));
     assert_eq!(uri.param("USER"), Some(Some("phone")));
 }
@@ -953,9 +822,7 @@ fn param_case_insensitive_lookup() {
 #[test]
 fn multiple_params_same_name() {
     // RFC doesn't forbid duplicate params; first match wins in our lookup
-    let uri: SipUri = "sip:host;a=1;a=2"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:host;a=1;a=2").unwrap();
     assert_eq!(uri.param("a"), Some(Some("1")));
     assert_eq!(
         uri.params()
@@ -966,9 +833,7 @@ fn multiple_params_same_name() {
 
 #[test]
 fn sip_uri_password_deprecated_but_parsed() {
-    let uri: SipUri = "sip:alice:secret@example.com"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:alice:secret@example.com").unwrap();
     assert_eq!(uri.user(), Some("alice"));
     assert_eq!(uri.password(), Some("secret"));
 }
@@ -980,9 +845,7 @@ fn sip_uri_password_deprecated_but_parsed() {
 #[test]
 fn urn_service_sos_request_uri() {
     // From production NG911 INVITE Request-URI
-    let uri: Uri = "urn:service:sos"
-        .parse()
-        .unwrap();
+    let uri = Uri::parse("urn:service:sos").unwrap();
     let urn = uri
         .as_urn()
         .unwrap();
@@ -994,18 +857,14 @@ fn urn_service_sos_request_uri() {
 #[test]
 fn urn_service_sos_with_port() {
     // Seen in To headers: the `:5060` is part of the NSS, not a port.
-    let urn: UrnUri = "urn:service:sos:5060"
-        .parse()
-        .unwrap();
+    let urn = UrnUri::parse("urn:service:sos:5060").unwrap();
     assert_eq!(urn.nss(), Some("sos:5060"));
 }
 
 #[test]
 fn urn_gsma_imei_in_sip_instance() {
     // From production wireless INVITE Contact +sip.instance
-    let urn: UrnUri = "urn:gsma:imei:35625207-210812-0"
-        .parse()
-        .unwrap();
+    let urn = UrnUri::parse("urn:gsma:imei:35625207-210812-0").unwrap();
     assert_eq!(urn.nid(), Some("gsma"));
     assert_eq!(urn.nss(), Some("imei:35625207-210812-0"));
     assert_eq!(urn.to_string(), "urn:gsma:imei:35625207-210812-0");
@@ -1014,9 +873,7 @@ fn urn_gsma_imei_in_sip_instance() {
 #[test]
 fn urn_3gpp_ims_service() {
     // From production wireless INVITE P-Preferred-Service
-    let urn: UrnUri = "urn:urn-7:3gpp-service.ims.icsi.mmtel"
-        .parse()
-        .unwrap();
+    let urn = UrnUri::parse("urn:urn-7:3gpp-service.ims.icsi.mmtel").unwrap();
     assert_eq!(urn.nid(), Some("urn-7"));
     assert_eq!(urn.nss(), Some("3gpp-service.ims.icsi.mmtel"));
 }
@@ -1024,9 +881,10 @@ fn urn_3gpp_ims_service() {
 #[test]
 fn urn_emergency_callid() {
     // From production wireless INVITE Call-Info
-    let urn: UrnUri = "urn:emergency:callid:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6:bcf.ng911.example.com"
-        .parse()
-        .unwrap();
+    let urn = UrnUri::parse(
+        "urn:emergency:callid:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6:bcf.ng911.example.com",
+    )
+    .unwrap();
     assert_eq!(urn.nid(), Some("emergency"));
     assert_eq!(
         urn.assigned_name(),
@@ -1036,10 +894,10 @@ fn urn_emergency_callid() {
 
 #[test]
 fn urn_emergency_incidentid() {
-    let urn: UrnUri =
-        "urn:emergency:incidentid:f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6:bcf.ng911.example.com"
-            .parse()
-            .unwrap();
+    let urn = UrnUri::parse(
+        "urn:emergency:incidentid:f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6:bcf.ng911.example.com",
+    )
+    .unwrap();
     assert_eq!(urn.nid(), Some("emergency"));
     assert!(urn
         .nss()
@@ -1050,9 +908,8 @@ fn urn_emergency_incidentid() {
 #[test]
 fn urn_nena_callid_wireline() {
     // From production wireline INVITE Call-Info (older NENA format)
-    let urn: UrnUri = "urn:nena:callid:20250101120000001TEST001:bcf1.ng911.example.com"
-        .parse()
-        .unwrap();
+    let urn =
+        UrnUri::parse("urn:nena:callid:20250101120000001TEST001:bcf1.ng911.example.com").unwrap();
     assert_eq!(urn.nid(), Some("nena"));
     assert!(urn
         .nss()
@@ -1066,8 +923,7 @@ fn urn_nena_callid_wireline() {
 
 #[test]
 fn urn_nena_incidentid_wireline() {
-    let urn: UrnUri = "urn:nena:incidentid:20250101120000002TEST002:bcf1.ng911.example.com"
-        .parse()
+    let urn = UrnUri::parse("urn:nena:incidentid:20250101120000002TEST002:bcf1.ng911.example.com")
         .unwrap();
     assert_eq!(urn.nid(), Some("nena"));
     assert!(urn
@@ -1079,9 +935,7 @@ fn urn_nena_incidentid_wireline() {
 #[test]
 fn urn_vendor_provider_id() {
     // From production wireline EIDO XML ProviderID
-    let urn: UrnUri = "urn:example:ng911:lsp:provider1"
-        .parse()
-        .unwrap();
+    let urn = UrnUri::parse("urn:example:ng911:lsp:provider1").unwrap();
     assert_eq!(urn.nid(), Some("example"));
     assert_eq!(urn.nss(), Some("ng911:lsp:provider1"));
 }
@@ -1089,26 +943,20 @@ fn urn_vendor_provider_id() {
 #[test]
 fn urn_nena_service_sos() {
     // NENA ESInet internal routing
-    let urn: UrnUri = "urn:nena:service:sos"
-        .parse()
-        .unwrap();
+    let urn = UrnUri::parse("urn:nena:service:sos").unwrap();
     assert_eq!(urn.nid(), Some("nena"));
     assert_eq!(urn.nss(), Some("service:sos"));
 }
 
 #[test]
 fn urn_nena_service_responder_police() {
-    let urn: UrnUri = "urn:nena:service:responder.police"
-        .parse()
-        .unwrap();
+    let urn = UrnUri::parse("urn:nena:service:responder.police").unwrap();
     assert_eq!(urn.nss(), Some("service:responder.police"));
 }
 
 #[test]
 fn urn_uuid_sip_instance() {
-    let urn: UrnUri = "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-        .parse()
-        .unwrap();
+    let urn = UrnUri::parse("urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6").unwrap();
     assert_eq!(urn.nid(), Some("uuid"));
     assert_eq!(
         urn.to_string(),
@@ -1118,9 +966,7 @@ fn urn_uuid_sip_instance() {
 
 #[test]
 fn uri_dispatch_urn_case_insensitive() {
-    let uri: Uri = "URN:service:sos"
-        .parse()
-        .unwrap();
+    let uri = Uri::parse("URN:service:sos").unwrap();
     assert!(uri
         .as_urn()
         .is_some());
@@ -1141,21 +987,17 @@ fn urn_roundtrip_all_ng911_patterns() {
         "urn:example:ng911:lsp:provider1",
     ];
     for input in patterns {
-        let urn: UrnUri = input
-            .parse()
-            .expect(input);
+        let urn = UrnUri::parse(input).expect(input);
         assert_eq!(urn.to_string(), input, "round-trip failed for {input}");
     }
 }
 
 #[test]
 fn literal_and_escaped_header_octets_compare_equal() {
-    let literal: SipUri = "sip:alice@example.com?From=a@example.org&Subject=%E2%9C%93x"
-        .parse()
-        .unwrap();
-    let escaped: SipUri = "sip:alice@example.com?From=a%40example.org&Subject=%e2%9c%93%78"
-        .parse()
-        .unwrap();
+    let literal =
+        SipUri::parse("sip:alice@example.com?From=a@example.org&Subject=%E2%9C%93x").unwrap();
+    let escaped =
+        SipUri::parse("sip:alice@example.com?From=a%40example.org&Subject=%e2%9c%93%78").unwrap();
     assert_eq!(literal, escaped);
     assert_eq!(
         literal.header("From"),
@@ -1166,9 +1008,7 @@ fn literal_and_escaped_header_octets_compare_equal() {
 #[test]
 fn encode_uri_header_round_trips_through_parse() {
     let replaces = sip_uri::encode_uri_header("12345@example.com;to-tag=abc;from-tag=def");
-    let uri: SipUri = format!("sip:alice@example.com?Replaces={replaces}")
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse(&format!("sip:alice@example.com?Replaces={replaces}")).unwrap();
     assert_eq!(uri.header("Replaces"), Some(replaces.as_ref()));
 }
 
@@ -1181,13 +1021,8 @@ fn escaped_delimiters_survive_display() {
         "sip:example.com;maddr=a%40b",
         "sip:example.com?From=a%40b",
     ] {
-        let parsed: SipUri = input
-            .parse()
-            .unwrap();
-        let reparsed: SipUri = parsed
-            .to_string()
-            .parse()
-            .unwrap();
+        let parsed = SipUri::parse(input).unwrap();
+        let reparsed = SipUri::parse(&parsed.to_string()).unwrap();
         assert_eq!(reparsed, parsed, "{input} -> {parsed}");
     }
 }
@@ -1200,10 +1035,7 @@ fn builder_input_cannot_inject_components() {
         .with_password("p:w@x")
         .with_param("x", Some("a;b?c=d".into()))
         .with_header("Subject", "a&b=c#d");
-    let reparsed: SipUri = uri
-        .to_string()
-        .parse()
-        .unwrap();
+    let reparsed = SipUri::parse(&uri.to_string()).unwrap();
     assert_eq!(reparsed, uri);
     assert_eq!(
         reparsed
@@ -1230,10 +1062,7 @@ fn builder_input_cannot_inject_components() {
 fn tel_number_cannot_inject_params() {
     let tel = TelUri::new("+1555;x=1");
     assert_eq!(tel.number(), Some("+1555%3Bx=1"));
-    let reparsed: TelUri = tel
-        .to_string()
-        .parse()
-        .unwrap();
+    let reparsed = TelUri::parse(&tel.to_string()).unwrap();
     assert_eq!(reparsed, tel);
     assert!(reparsed
         .params()
@@ -1244,10 +1073,7 @@ fn tel_number_cannot_inject_params() {
 fn hostname_cannot_inject_params() {
     let uri = SipUri::new(Host::Hostname("evil;lr".into()));
     assert_eq!(uri.to_string(), "sip:evil%3Blr");
-    let reparsed: SipUri = uri
-        .to_string()
-        .parse()
-        .unwrap();
+    let reparsed = SipUri::parse(&uri.to_string()).unwrap();
     assert_eq!(reparsed, uri);
     assert!(reparsed
         .params()
@@ -1264,10 +1090,7 @@ fn hostname_canonizes_like_parsed_host() {
 fn fragments_cannot_inject_components() {
     let sip = SipUri::new(Host::Hostname("example.com".into())).with_fragment("a@b c");
     assert_eq!(sip.fragment(), Some("a%40b%20c"));
-    let reparsed: SipUri = sip
-        .to_string()
-        .parse()
-        .unwrap();
+    let reparsed = SipUri::parse(&sip.to_string()).unwrap();
     assert_eq!(reparsed, sip);
     assert_eq!(reparsed.user(), None);
 
@@ -1275,10 +1098,7 @@ fn fragments_cannot_inject_components() {
         .with_param("cpc", Some("emergency".into()))
         .with_fragment("x y#z");
     assert_eq!(tel.fragment(), Some("x%20y#z"));
-    let reparsed: TelUri = tel
-        .to_string()
-        .parse()
-        .unwrap();
+    let reparsed = TelUri::parse(&tel.to_string()).unwrap();
     assert_eq!(reparsed, tel);
 
     let urn = UrnUri::new("example", "a?b#c")
@@ -1287,22 +1107,15 @@ fn fragments_cannot_inject_components() {
     assert_eq!(urn.nss(), Some("a%3Fb%23c"));
     assert_eq!(urn.r_component(), Some("r%3F=q"));
     assert_eq!(urn.f_component(), Some("f%20g"));
-    let reparsed: UrnUri = urn
-        .to_string()
-        .parse()
-        .unwrap();
+    let reparsed = UrnUri::parse(&urn.to_string()).unwrap();
     assert_eq!(reparsed, urn);
     assert_eq!(reparsed.q_component(), None);
 }
 
 #[test]
 fn literal_hash_and_escaped_hash_stay_distinct_in_user() {
-    let literal: SipUri = "sip:%2A#@example.com"
-        .parse()
-        .unwrap();
-    let escaped: SipUri = "sip:*%23@example.com"
-        .parse()
-        .unwrap();
+    let literal = SipUri::parse("sip:%2A#@example.com").unwrap();
+    let escaped = SipUri::parse("sip:*%23@example.com").unwrap();
     assert_eq!(literal.user(), Some("*#"));
     assert_eq!(escaped.user(), Some("*%23"));
     assert_ne!(literal, escaped);
@@ -1310,9 +1123,7 @@ fn literal_hash_and_escaped_hash_stay_distinct_in_user() {
 
 #[test]
 fn parts_build_what_the_parser_builds() {
-    let parsed: SipUri = "sip:+15551234567;cpc=emergency@example.com;user=phone"
-        .parse()
-        .unwrap();
+    let parsed = SipUri::parse("sip:+15551234567;cpc=emergency@example.com;user=phone").unwrap();
     let mut parts = SipUriParts::default();
     parts.scheme = Some(Scheme::Sip);
     parts.user = Some("+1555%31234567".into());
@@ -1338,17 +1149,13 @@ fn parts_build_what_the_parser_builds() {
     urn.nss = Some("sos".into());
     assert_eq!(
         Uri::from(UrnUri::from(urn)),
-        "urn:service:sos"
-            .parse::<Uri>()
-            .unwrap()
+        Uri::parse("urn:service:sos").unwrap()
     );
 }
 
 #[test]
 fn other_uri_new_matches_parsed_other() {
-    let parsed: Uri = "HTTPS://example.com/a"
-        .parse()
-        .unwrap();
+    let parsed = Uri::parse("HTTPS://example.com/a").unwrap();
     let built = OtherUri::new(Some("https"), "//example.com/a").unwrap();
     assert_eq!(parsed, Uri::Other(built));
     assert_eq!(OtherUri::new(Some("tel"), "+15551234567"), None);
@@ -1366,19 +1173,14 @@ fn equal_uris_hash_equal() {
         "urn:service:sos",
     ]
     .iter()
-    .map(|s| {
-        s.parse()
-            .unwrap()
-    })
+    .map(|s| Uri::parse(s).unwrap())
     .collect();
     assert_eq!(set.len(), 3);
 }
 
 #[test]
 fn builder_canonization_is_idempotent() {
-    let uri: SipUri = "sip:%61lice;x=a%3Bb@example.com;p=%41"
-        .parse()
-        .unwrap();
+    let uri = SipUri::parse("sip:%61lice;x=a%3Bb@example.com;p=%41").unwrap();
     let rebuilt = SipUri::new(
         uri.host()
             .unwrap()

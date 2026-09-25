@@ -1,8 +1,7 @@
-use sip_uri::{Redaction, SipUri, TelUri, Uri, UserMask};
+use sip_uri::{Redaction, SipUri, TelUri, Uri, UriParse, UserMask};
 
 fn sip(s: &str) -> SipUri {
-    s.parse()
-        .unwrap()
+    SipUri::parse(s).unwrap()
 }
 
 #[test]
@@ -79,9 +78,7 @@ fn headers_and_named_params_can_be_masked() {
 
 #[test]
 fn tel_number_is_masked_by_default() {
-    let tel: TelUri = "tel:+15551234567;cpc=emergency"
-        .parse()
-        .unwrap();
+    let tel = TelUri::parse("tel:+15551234567;cpc=emergency").unwrap();
     assert_eq!(
         tel.redacted(Redaction::default())
             .to_string(),
@@ -96,17 +93,13 @@ fn tel_number_is_masked_by_default() {
 
 #[test]
 fn uri_dispatches_and_leaves_others_unmasked() {
-    let sip: Uri = "sip:alice@example.com"
-        .parse()
-        .unwrap();
+    let sip = Uri::parse("sip:alice@example.com").unwrap();
     assert_eq!(
         sip.redacted(Redaction::default())
             .to_string(),
         "sip:***@example.com"
     );
-    let urn: Uri = "urn:service:sos"
-        .parse()
-        .unwrap();
+    let urn = Uri::parse("urn:service:sos").unwrap();
     assert_eq!(
         urn.redacted(Redaction::default())
             .to_string(),
