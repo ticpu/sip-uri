@@ -1,6 +1,7 @@
 use crate::parse::{
-    canonize_header, canonize_param, canonize_user, canonize_user_param_name, is_hnv_char,
-    is_param_strict, is_tel_paramchar, is_tel_pname_char, is_user_char,
+    canonize_header, canonize_octets, canonize_param, canonize_user, canonize_user_param_name,
+    is_hnv_char, is_param_literal, is_param_strict, is_tel_paramchar, is_tel_pname_char,
+    is_user_char,
 };
 use crate::warning::{Component, WarningCode, Warnings};
 
@@ -132,6 +133,14 @@ pub(crate) fn format_headers(
         }
     }
     Ok(())
+}
+
+/// Canonize a builder-supplied URI or tel: param, escaping delimiters.
+pub(crate) fn canonize_param_pair(name: &str, value: Option<&str>) -> (String, Option<String>) {
+    (
+        canonize_octets(name, is_param_literal),
+        value.map(|v| canonize_octets(v, is_param_literal)),
+    )
 }
 
 /// Look up a parameter by name (case-insensitive).

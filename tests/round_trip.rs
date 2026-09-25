@@ -1188,3 +1188,64 @@ fn escaped_delimiters_survive_display() {
         assert_eq!(reparsed, parsed, "{input} -> {parsed}");
     }
 }
+
+#[test]
+fn builder_input_cannot_inject_components() {
+    let uri = SipUri::new(Host::Hostname("example.com".into()))
+        .with_user("+15551234567;cpc=x@evil.example.com")
+        .with_user_param("a=b", Some("c;d".into()))
+        .with_password("p:w@x")
+        .with_param("x", Some("a;b?c=d".into()))
+        .with_header("Subject", "a&b=c#d");
+    let reparsed: SipUri = uri
+        .to_string()
+        .parse()
+        .unwrap();
+    assert_eq!(reparsed, uri);
+    assert_eq!(
+        reparsed
+            .params()
+            .len(),
+        1
+    );
+    assert_eq!(
+        reparsed
+            .user_params()
+            .len(),
+        1
+    );
+    assert_eq!(
+        reparsed
+            .headers()
+            .len(),
+        1
+    );
+    assert_eq!(reparsed.host(), Some(&Host::Hostname("example.com".into())));
+}
+
+#[test]
+fn builder_canonization_is_idempotent() {
+    let uri: SipUri = "sip:%61lice;x=a%3Bb@example.com;p=%41"
+        .parse()
+        .unwrap();
+    let rebuilt = SipUri::new(
+        uri.host()
+            .unwrap()
+            .clone(),
+    )
+    .with_user(
+        uri.user()
+            .unwrap(),
+    )
+    .with_user_params(
+        uri.user_params()
+            .to_vec(),
+    )
+    .with_param(
+        "p",
+        uri.param("p")
+            .flatten()
+            .map(str::to_string),
+    );
+    assert_eq!(rebuilt, uri);
+}

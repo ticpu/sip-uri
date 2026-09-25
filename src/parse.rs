@@ -215,27 +215,33 @@ pub(crate) fn canonize_param(input: &str) -> String {
 
 /// Canonize a header name or value: every octet, escaped or literal, is
 /// written literally when in the hnv set and as uppercase `%XX` otherwise.
-/// A `%` not starting a valid escape is the octet `%`.
 pub(crate) fn canonize_header(input: &str) -> String {
+    canonize_octets(input, is_hnv_char)
+}
+
+/// Write every octet of `input`, escaped or literal, literally when `literal`
+/// admits it and as uppercase `%XX` otherwise. A `%` not starting a valid
+/// escape is the octet `%`, so the result is idempotent.
+pub(crate) fn canonize_octets(input: &str, literal: fn(u8) -> bool) -> String {
     let bytes = input.as_bytes();
     let mut out = String::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
             if let (Some(hi), Some(lo)) = (hex_digit(bytes[i + 1]), hex_digit(bytes[i + 2])) {
-                push_hnv_octet(&mut out, (hi << 4) | lo);
+                push_octet(&mut out, (hi << 4) | lo, literal);
                 i += 3;
                 continue;
             }
         }
-        push_hnv_octet(&mut out, bytes[i]);
+        push_octet(&mut out, bytes[i], literal);
         i += 1;
     }
     out
 }
 
-fn push_hnv_octet(out: &mut String, b: u8) {
-    if is_hnv_char(b) {
+fn push_octet(out: &mut String, b: u8, literal: fn(u8) -> bool) {
+    if b.is_ascii() && literal(b) {
         out.push(b as char);
     } else {
         const HEX: &[u8; 16] = b"0123456789ABCDEF";
@@ -269,7 +275,7 @@ pub fn encode_uri_header(s: &str) -> Cow<'_, str> {
     let mut out = String::with_capacity(bytes.len() + 2 * (bytes.len() - first));
     out.push_str(&s[..first]);
     for &b in &bytes[first..] {
-        push_hnv_octet(&mut out, b);
+        push_octet(&mut out, b, is_hnv_char);
     }
     Cow::Owned(out)
 }

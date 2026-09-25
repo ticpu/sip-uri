@@ -32,10 +32,10 @@ impl TelUri {
         }
     }
 
-    /// Add a parameter.
+    /// Add a parameter, escaping any delimiter in the name or value.
     pub fn with_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
         self.params
-            .push((name.into(), value));
+            .push(params::canonize_param_pair(&name.into(), value.as_deref()));
         self
     }
 

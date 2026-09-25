@@ -82,27 +82,39 @@ impl SipUri {
     }
 
     /// Set the user part.
+    ///
+    /// Builder text is canonized like parsed text: `%XX` is kept, and a
+    /// delimiter or byte outside the user grammar is escaped, so the value
+    /// can never add user-params or end the userinfo.
     pub fn with_user(mut self, user: impl Into<String>) -> Self {
-        self.user = Some(user.into());
+        self.user = Some(parse::canonize_octets(&user.into(), parse::is_user_literal));
         self
     }
 
-    /// Replace all user-params (parameters within the userinfo, before `@`).
+    /// Replace all user-params (parameters within the userinfo, before `@`),
+    /// canonized as [`SipUri::with_user_param`] does.
     pub fn with_user_params(mut self, params: Vec<(String, Option<String>)>) -> Self {
-        self.user_params = params;
+        self.user_params = params
+            .into_iter()
+            .map(|(name, value)| canonize_user_param(&name, value.as_deref()))
+            .collect();
         self
     }
 
-    /// Add a single user-param (parameter within the userinfo, before `@`).
+    /// Add a single user-param (parameter within the userinfo, before `@`),
+    /// escaping any delimiter in the name or value.
     pub fn with_user_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
         self.user_params
-            .push((name.into(), value));
+            .push(canonize_user_param(&name.into(), value.as_deref()));
         self
     }
 
-    /// Set the password.
+    /// Set the password, escaping any delimiter in it.
     pub fn with_password(mut self, password: impl Into<String>) -> Self {
-        self.password = Some(password.into());
+        self.password = Some(parse::canonize_octets(
+            &password.into(),
+            parse::is_password_char,
+        ));
         self
     }
 
@@ -112,17 +124,20 @@ impl SipUri {
         self
     }
 
-    /// Add a URI parameter.
+    /// Add a URI parameter, escaping any delimiter in the name or value.
     pub fn with_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
         self.params
-            .push((name.into(), value));
+            .push(params::canonize_param_pair(&name.into(), value.as_deref()));
         self
     }
 
-    /// Add a header.
+    /// Add a header, escaping any delimiter in the name or value.
     pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers
-            .push((name.into(), value.into()));
+            .push((
+                parse::canonize_header(&name.into()),
+                parse::canonize_header(&value.into()),
+            ));
         self
     }
 
@@ -294,6 +309,13 @@ impl SipUri {
             fragment,
         }))
     }
+}
+
+fn canonize_user_param(name: &str, value: Option<&str>) -> (String, Option<String>) {
+    (
+        parse::canonize_octets(name, parse::is_user_param_name_literal),
+        value.map(|v| parse::canonize_octets(v, parse::is_user_literal)),
+    )
 }
 
 /// Split a SIP URI (after scheme:) into optional userinfo and the rest (host onwards).
