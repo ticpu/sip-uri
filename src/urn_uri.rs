@@ -1,9 +1,6 @@
 use std::fmt;
-use std::str::FromStr;
 
-use crate::error::ParseError;
-use crate::parse::{self, SchemeSplit};
-use crate::warning::{Component, Parsed, WarningCode, Warnings};
+use crate::canon;
 
 /// URN (Uniform Resource Name) per RFC 8141.
 ///
@@ -23,35 +20,90 @@ pub struct UrnUri {
     f_component: Option<String>,
 }
 
+/// The components of a [`UrnUri`], each canonized on conversion.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct UrnUriParts {
+    /// The namespace identifier.
+    pub nid: Option<String>,
+    /// The namespace-specific string.
+    pub nss: Option<String>,
+    /// The resolution component, after `?+`.
+    pub r_component: Option<String>,
+    /// The query component, after `?=`.
+    pub q_component: Option<String>,
+    /// The fragment component, after `#`.
+    pub f_component: Option<String>,
+}
+
+impl From<UrnUriParts> for UrnUri {
+    fn from(p: UrnUriParts) -> Self {
+        UrnUri {
+            nid: p
+                .nid
+                .as_deref()
+                .filter(|n| !n.is_empty())
+                .map(canon::canonize_nid),
+            nss: p
+                .nss
+                .as_deref()
+                .filter(|n| !n.is_empty())
+                .map(canon::canonize_nss),
+            r_component: p
+                .r_component
+                .as_deref()
+                .map(canon::canonize_urn_r),
+            q_component: p
+                .q_component
+                .as_deref()
+                .map(canon::canonize_urn_q),
+            f_component: p
+                .f_component
+                .as_deref()
+                .map(canon::canonize_fragment),
+        }
+    }
+}
+
 impl UrnUri {
     /// Create a new URN with the given NID and NSS.
     ///
     /// Both are canonized like parsed text, and the NID is lowercased.
     pub fn new(nid: impl Into<String>, nss: impl Into<String>) -> Self {
-        UrnUri {
-            nid: Some(parse::canonize_nid(&nid.into())),
-            nss: Some(parse::canonize_nss(&nss.into())),
-            r_component: None,
-            q_component: None,
-            f_component: None,
+        UrnUriParts {
+            nid: Some(nid.into()),
+            nss: Some(nss.into()),
+            ..Default::default()
+        }
+        .into()
+    }
+
+    /// The components, in canonical form.
+    pub fn into_parts(self) -> UrnUriParts {
+        UrnUriParts {
+            nid: self.nid,
+            nss: self.nss,
+            r_component: self.r_component,
+            q_component: self.q_component,
+            f_component: self.f_component,
         }
     }
 
     /// Set the resolution component (`?+`).
     pub fn with_r_component(mut self, r: impl Into<String>) -> Self {
-        self.r_component = Some(parse::canonize_urn_r(&r.into()));
+        self.r_component = Some(canon::canonize_urn_r(&r.into()));
         self
     }
 
     /// Set the query component (`?=`).
     pub fn with_q_component(mut self, q: impl Into<String>) -> Self {
-        self.q_component = Some(parse::canonize_urn_q(&q.into()));
+        self.q_component = Some(canon::canonize_urn_q(&q.into()));
         self
     }
 
     /// Set the fragment component (`#`).
     pub fn with_f_component(mut self, f: impl Into<String>) -> Self {
-        self.f_component = Some(parse::canonize_fragment(&f.into()));
+        self.f_component = Some(canon::canonize_fragment(&f.into()));
         self
     }
 
@@ -101,175 +153,6 @@ fn push_assigned(out: &mut String, nid: Option<&str>, nss: Option<&str>) {
     }
 }
 
-/// RFC 8141: `NID = (alphanum) 0*30(ldh) (alphanum)` where `ldh = alphanum / "-"`.
-fn is_valid_nid(nid: &str) -> bool {
-    let bytes = nid.as_bytes();
-    (2..=32).contains(&bytes.len())
-        && bytes[0].is_ascii_alphanumeric()
-        && bytes[bytes.len() - 1].is_ascii_alphanumeric()
-        && bytes
-            .iter()
-            .all(|&b| b.is_ascii_alphanumeric() || b == b'-')
-}
-
-/// RFC 3986 pchar: `unreserved / pct-encoded / sub-delims / ":" / "@"`
-fn is_pchar(b: u8) -> bool {
-    b.is_ascii_alphanumeric()
-        || matches!(
-            b,
-            b'-' | b'.'
-                | b'_'
-                | b'~'
-                | b'!'
-                | b'$'
-                | b'&'
-                | b'\''
-                | b'('
-                | b')'
-                | b'*'
-                | b'+'
-                | b','
-                | b';'
-                | b'='
-                | b':'
-                | b'@'
-        )
-}
-
-impl FromStr for UrnUri {
-    type Err = ParseError;
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        Self::parse_with_warnings(input).map(|parsed| parsed.value)
-    }
-}
-
-impl UrnUri {
-    /// Parse, rejecting any grammar breach as [`ParseError::NonConformant`].
-    pub fn parse_strict(input: &str) -> Result<Self, ParseError> {
-        Self::parse_with_warnings(input)?.into_strict()
-    }
-
-    /// Parse, reporting accepted grammar breaches beside the value.
-    ///
-    /// Accepts exactly what [`FromStr`] accepts: everything except empty
-    /// input and a scheme other than `urn`.
-    pub fn parse_with_warnings(input: &str) -> Result<Parsed<Self>, ParseError> {
-        if input.is_empty() {
-            return Err(ParseError::Empty);
-        }
-        let mut warnings = Warnings::new(input);
-
-        let rest = match parse::split_scheme(input) {
-            SchemeSplit::Named(s, rest) if s.eq_ignore_ascii_case("urn") => rest,
-            SchemeSplit::Named(..) => return Err(ParseError::SchemeMismatch),
-            SchemeSplit::Invalid => {
-                warnings.push(Component::Scheme, WarningCode::InvalidScheme, input, 0);
-                input
-            }
-            SchemeSplit::Absent => {
-                warnings.push(Component::Scheme, WarningCode::MissingScheme, input, 0);
-                input
-            }
-        };
-
-        let (nid_str, after_nid) = match rest.split_once(':') {
-            Some((nid, after)) => (nid, Some(after)),
-            None => (rest, None),
-        };
-        let nid = if nid_str.is_empty() {
-            warnings.push(Component::Nid, WarningCode::MissingNid, nid_str, 0);
-            None
-        } else {
-            if !is_valid_nid(nid_str) {
-                warnings.push(Component::Nid, WarningCode::InvalidNid, nid_str, 0);
-            }
-            Some(parse::canonize_nid(nid_str))
-        };
-
-        let after_nid = after_nid.unwrap_or_default();
-
-        // `#` appears in no component, so the first one starts the fragment.
-        let (before_fragment, f_component) = match after_nid.split_once('#') {
-            Some((before, frag)) => {
-                warnings.charset(Component::FComponent, frag, is_rqf_char);
-                (before, Some(parse::canonize_fragment(frag)))
-            }
-            None => (after_nid, None),
-        };
-
-        // `?` is not a pchar: `?+` or `?=` ends the NSS, any other `?` stays in it.
-        let rq_start = before_fragment
-            .match_indices('?')
-            .map(|(i, _)| i)
-            .find(|&i| {
-                matches!(
-                    before_fragment
-                        .as_bytes()
-                        .get(i + 1),
-                    Some(b'+' | b'=')
-                )
-            });
-        let (nss_str, rq_str) = match rq_start {
-            Some(q) => (&before_fragment[..q], Some(&before_fragment[q..])),
-            None => (before_fragment, None),
-        };
-
-        let nss = if nss_str.is_empty() {
-            warnings.push(Component::Nss, WarningCode::MissingNss, nss_str, 0);
-            None
-        } else {
-            if nss_str.starts_with('/') {
-                warnings.push(Component::Nss, WarningCode::InvalidChar, nss_str, 0);
-            } else {
-                warnings.charset(Component::Nss, nss_str, |b| is_pchar(b) || b == b'/');
-            }
-            Some(parse::canonize_nss(nss_str))
-        };
-
-        let (r_component, q_component) = match rq_str {
-            Some(rq) => parse_rq_components(rq),
-            None => (None, None),
-        };
-        for (component, value) in [
-            (Component::RComponent, r_component),
-            (Component::QComponent, q_component),
-        ] {
-            if let Some(value) = value {
-                if value.is_empty() {
-                    warnings.push(component, WarningCode::EmptyComponent, value, 0);
-                }
-                warnings.charset(component, value, is_rqf_char);
-            }
-        }
-
-        Ok(warnings.finish(UrnUri {
-            nid,
-            nss,
-            r_component: r_component.map(parse::canonize_urn_r),
-            q_component: q_component.map(parse::canonize_urn_q),
-            f_component,
-        }))
-    }
-}
-
-/// RFC 8141: r-, q- and f-components are `*( pchar / "/" / "?" )`.
-fn is_rqf_char(b: u8) -> bool {
-    is_pchar(b) || matches!(b, b'/' | b'?')
-}
-
-/// Split `?+r` and/or `?=q`; the input starts with one of the two.
-fn parse_rq_components(s: &str) -> (Option<&str>, Option<&str>) {
-    if let Some(r) = s.strip_prefix("?+") {
-        match r.split_once("?=") {
-            Some((r, q)) => (Some(r), Some(q)),
-            None => (Some(r), None),
-        }
-    } else {
-        (None, s.strip_prefix("?="))
-    }
-}
-
 impl fmt::Display for UrnUri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut assigned = String::from("urn:");
@@ -293,192 +176,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_service_sos() {
-        let urn: UrnUri = "urn:service:sos"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("service"));
-        assert_eq!(urn.nss(), Some("sos"));
-    }
-
-    #[test]
-    fn parse_service_sos_subtype() {
-        let urn: UrnUri = "urn:service:sos.fire"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("service"));
-        assert_eq!(urn.nss(), Some("sos.fire"));
-    }
-
-    #[test]
-    fn parse_nena_service() {
-        let urn: UrnUri = "urn:nena:service:sos"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("nena"));
-        assert_eq!(urn.nss(), Some("service:sos"));
-    }
-
-    #[test]
-    fn parse_nena_uid_callid() {
-        let urn: UrnUri = "urn:nena:callid:20250101120000001TEST001:bcf1.ng911.example.com"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("nena"));
-        assert_eq!(
-            urn.nss()
-                .unwrap(),
-            "callid:20250101120000001TEST001:bcf1.ng911.example.com"
-        );
-    }
-
-    #[test]
-    fn parse_emergency_incidentid() {
-        let urn: UrnUri =
-            "urn:emergency:incidentid:f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6:bcf.ng911.example.com"
-                .parse()
-                .unwrap();
-        assert_eq!(urn.nid(), Some("emergency"));
-        assert!(urn
-            .nss()
-            .unwrap()
-            .starts_with("incidentid:"));
-    }
-
-    #[test]
-    fn parse_gsma_imei() {
-        let urn: UrnUri = "urn:gsma:imei:35625207-210812-0"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("gsma"));
-        assert_eq!(urn.nss(), Some("imei:35625207-210812-0"));
-    }
-
-    #[test]
-    fn parse_urn7_3gpp() {
-        let urn: UrnUri = "urn:urn-7:3gpp-service.ims.icsi.mmtel"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("urn-7"));
-        assert_eq!(urn.nss(), Some("3gpp-service.ims.icsi.mmtel"));
-    }
-
-    #[test]
-    fn parse_uuid() {
-        let urn: UrnUri = "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("uuid"));
-        assert_eq!(urn.nss(), Some("f81d4fae-7dec-11d0-a765-00a0c91e6bf6"));
-    }
-
-    #[test]
-    fn parse_case_insensitive_scheme() {
-        let urn: UrnUri = "URN:service:sos"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("service"));
-    }
-
-    #[test]
-    fn nid_case_insensitive() {
-        let urn: UrnUri = "urn:SERVICE:sos"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("service"));
-    }
-
-    #[test]
-    fn nss_percent_encoding_uppercased() {
-        let urn: UrnUri = "urn:example:foo%2fbar"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nss(), Some("foo%2Fbar"));
-    }
-
-    #[test]
-    fn display_roundtrip() {
-        let input = "urn:service:sos.police";
-        let urn: UrnUri = input
-            .parse()
-            .unwrap();
-        assert_eq!(urn.to_string(), input);
-    }
-
-    #[test]
-    fn display_roundtrip_nena_callid() {
-        let input = "urn:nena:callid:abc123:host.example.com";
-        let urn: UrnUri = input
-            .parse()
-            .unwrap();
-        assert_eq!(urn.to_string(), input);
-    }
-
-    #[test]
-    fn with_rq_components() {
-        let urn: UrnUri = "urn:example:foo?+resolve?=query#frag"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nss(), Some("foo"));
-        assert_eq!(urn.r_component(), Some("resolve"));
-        assert_eq!(urn.q_component(), Some("query"));
-        assert_eq!(urn.f_component(), Some("frag"));
-        assert_eq!(urn.to_string(), "urn:example:foo?+resolve?=query#frag");
-    }
-
-    #[test]
-    fn with_r_component_only() {
-        let urn: UrnUri = "urn:example:foo?+resolve"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.r_component(), Some("resolve"));
-        assert_eq!(urn.q_component(), None);
-    }
-
-    #[test]
-    fn with_q_component_only() {
-        let urn: UrnUri = "urn:example:foo?=query"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.r_component(), None);
-        assert_eq!(urn.q_component(), Some("query"));
-    }
-
-    #[test]
-    fn with_fragment_only() {
-        let urn: UrnUri = "urn:example:foo#section1"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.f_component(), Some("section1"));
-        assert_eq!(urn.r_component(), None);
-        assert_eq!(urn.q_component(), None);
-    }
-
-    #[test]
-    fn assigned_name() {
-        let urn: UrnUri = "urn:service:sos?+r?=q#f"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.assigned_name(), "urn:service:sos");
-    }
-
-    #[test]
-    fn nss_with_slashes() {
-        let urn: UrnUri = "urn:example:a/b/c"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nss(), Some("a/b/c"));
-    }
-
-    #[test]
-    fn nss_with_colons() {
-        let urn: UrnUri = "urn:example:a:b:c"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nss(), Some("a:b:c"));
-    }
-
-    #[test]
     fn builder() {
         let urn = UrnUri::new("service", "sos.fire");
         assert_eq!(urn.to_string(), "urn:service:sos.fire");
@@ -496,82 +193,33 @@ mod tests {
         );
     }
 
-    // Negative tests
-
     #[test]
-    fn missing_scheme() {
-        assert!("service:sos"
-            .parse::<UrnUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn wrong_scheme() {
-        assert!("http:service:sos"
-            .parse::<UrnUri>()
-            .is_err());
-    }
-
-    #[test]
-    fn nonconformant_nid_and_nss_warn() {
-        let long_nid = format!("urn:{}:foo", "a".repeat(33));
-        for (input, code) in [
-            ("urn:x:foo", WarningCode::InvalidNid),
-            (long_nid.as_str(), WarningCode::InvalidNid),
-            ("urn:-ab:foo", WarningCode::InvalidNid),
-            ("urn:ab-:foo", WarningCode::InvalidNid),
-            ("urn:example:", WarningCode::MissingNss),
-            ("urn:example:/foo", WarningCode::InvalidChar),
-            ("urn:example:foo?x", WarningCode::InvalidChar),
-        ] {
-            let parsed = UrnUri::parse_with_warnings(input).unwrap();
-            assert_eq!(
-                parsed
-                    .warnings
-                    .iter()
-                    .map(|w| w.code)
-                    .collect::<Vec<_>>(),
-                [code],
-                "{input}"
-            );
-            assert_eq!(
-                parsed
-                    .value
-                    .to_string()
-                    .parse::<UrnUri>()
-                    .unwrap(),
-                parsed.value,
-                "{input}"
-            );
-        }
-    }
-
-    #[test]
-    fn service_sos_with_port_in_to_header() {
-        // Seen in production: `<urn:service:sos:5060>` in To header
-        // The `:5060` is part of the NSS (not a port), and parses fine
-        let urn: UrnUri = "urn:service:sos:5060"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("service"));
-        assert_eq!(urn.nss(), Some("sos:5060"));
-    }
-
-    #[test]
-    fn vendor_provider_id() {
-        let urn: UrnUri = "urn:example:ng911:lsp:provider1"
-            .parse()
-            .unwrap();
+    fn parts_canonize_like_builders() {
+        let urn = UrnUri::from(UrnUriParts {
+            nid: Some("EXAMPLE".into()),
+            nss: Some("a b".into()),
+            r_component: Some("x?=y".into()),
+            ..Default::default()
+        });
+        assert_eq!(urn, UrnUri::new("EXAMPLE", "a b").with_r_component("x?=y"));
         assert_eq!(urn.nid(), Some("example"));
-        assert_eq!(urn.nss(), Some("ng911:lsp:provider1"));
+        assert_eq!(
+            UrnUri::from(
+                urn.clone()
+                    .into_parts()
+            ),
+            urn
+        );
     }
 
     #[test]
-    fn nena_service_responder_police() {
-        let urn: UrnUri = "urn:nena:service:responder.police"
-            .parse()
-            .unwrap();
-        assert_eq!(urn.nid(), Some("nena"));
-        assert_eq!(urn.nss(), Some("service:responder.police"));
+    fn empty_nid_and_nss_are_absent() {
+        assert_eq!(UrnUri::new("", "x").nid(), None);
+        assert_eq!(UrnUri::new("x", "").nss(), None);
+        let empty_rqf = UrnUri::new("example", "a")
+            .with_r_component("")
+            .with_q_component("")
+            .with_f_component("");
+        assert_eq!(empty_rqf.to_string(), "urn:example:a?+?=#");
     }
 }

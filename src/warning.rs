@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::error::ParseError;
-use crate::parse::validate_pct_encoded;
+use crate::grammar::validate_pct_encoded;
 
 /// A parse result together with the non-conformance found on the way.
 ///

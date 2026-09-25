@@ -1,13 +1,10 @@
 use std::fmt;
-use std::str::FromStr;
 
-use crate::error::ParseError;
-use crate::parse::{self, SchemeSplit};
+use crate::canon;
 use crate::sip_uri::Scheme;
 use crate::sip_uri::SipUri;
 use crate::tel_uri::TelUri;
 use crate::urn_uri::UrnUri;
-use crate::warning::{Component, Parsed, WarningCode, Warnings};
 
 /// A parsed URI: SIP/SIPS, tel, URN, or an opaque URI with an unrecognized scheme.
 ///
@@ -27,7 +24,8 @@ pub enum Uri {
     Other(OtherUri),
 }
 
-/// Text kept as sent except for its scheme, which is lowercased.
+/// Text kept as sent except for its scheme, which is lowercased, and the
+/// bytes [`OtherUri::new`] escapes.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OtherUri {
     raw: String,
@@ -35,16 +33,33 @@ pub struct OtherUri {
 }
 
 impl OtherUri {
-    fn new(s: &str) -> Self {
-        match parse::split_scheme(s) {
-            SchemeSplit::Named(scheme, rest) => OtherUri {
-                raw: format!("{}:{rest}", scheme.to_ascii_lowercase()),
-                scheme_end: Some(scheme.len()),
-            },
-            SchemeSplit::Invalid | SchemeSplit::Absent => OtherUri {
-                raw: s.to_string(),
+    /// `scheme:rest` with the scheme lowercased, or `rest` alone without one.
+    ///
+    /// In `rest`, control bytes, space, `<`, `>`, `"` and every byte of a
+    /// non-ASCII character become uppercase `%XX`; nothing is decoded, and
+    /// every other byte, `%` included, is kept as sent.
+    ///
+    /// `None` when the scheme is outside the RFC 3986 grammar or is `sip`,
+    /// `sips`, `tel` or `urn`, which have their own types, or when there is neither scheme nor text.
+    ///
+    /// ```
+    /// use sip_uri::OtherUri;
+    ///
+    /// let uri = OtherUri::new(Some("HTTPS"), "//example.com/a b").unwrap();
+    /// assert_eq!(uri.as_str(), "https://example.com/a%20b");
+    /// ```
+    pub fn new(scheme: Option<&str>, rest: &str) -> Option<Self> {
+        match scheme {
+            None if rest.is_empty() => None,
+            None => Some(OtherUri {
+                raw: canon::canonize_other(rest),
                 scheme_end: None,
-            },
+            }),
+            Some(s) if !canon::is_scheme(s) || canon::is_known_scheme(s) => None,
+            Some(s) => Some(OtherUri {
+                raw: format!("{}:{}", s.to_ascii_lowercase(), canon::canonize_other(rest)),
+                scheme_end: Some(s.len()),
+            }),
         }
     }
 
@@ -175,65 +190,6 @@ impl From<UrnUri> for Uri {
     }
 }
 
-impl FromStr for Uri {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::parse_with_warnings(s).map(|parsed| parsed.value)
-    }
-}
-
-impl Uri {
-    /// Parse, rejecting any grammar breach as [`ParseError::NonConformant`].
-    pub fn parse_strict(input: &str) -> Result<Self, ParseError> {
-        Self::parse_with_warnings(input)?.into_strict()
-    }
-
-    /// Parse, reporting accepted grammar breaches beside the value.
-    ///
-    /// Accepts exactly what [`FromStr`] accepts: everything but empty input.
-    /// Input without a scheme, or with one outside the RFC 3986 grammar such
-    /// as a URI still wrapped in `<>`, is kept as [`Uri::Other`] with a
-    /// warning.
-    pub fn parse_with_warnings(s: &str) -> Result<Parsed<Self>, ParseError> {
-        fn wrap<T>(parsed: Parsed<T>, variant: fn(T) -> Uri) -> Parsed<Uri> {
-            Parsed {
-                value: variant(parsed.value),
-                warnings: parsed.warnings,
-            }
-        }
-
-        if s.is_empty() {
-            return Err(ParseError::Empty);
-        }
-        let mut warnings = Warnings::new(s);
-        match parse::split_scheme(s) {
-            SchemeSplit::Named(scheme, _) if scheme.eq_ignore_ascii_case("tel") => {
-                return Ok(wrap(TelUri::parse_with_warnings(s)?, Uri::Tel));
-            }
-            SchemeSplit::Named(scheme, _)
-                if scheme.eq_ignore_ascii_case("sip") || scheme.eq_ignore_ascii_case("sips") =>
-            {
-                return Ok(wrap(SipUri::parse_with_warnings(s)?, Uri::Sip));
-            }
-            SchemeSplit::Named(scheme, _) if scheme.eq_ignore_ascii_case("urn") => {
-                return Ok(wrap(UrnUri::parse_with_warnings(s)?, Uri::Urn));
-            }
-            SchemeSplit::Named(..) => {}
-            SchemeSplit::Invalid => {
-                warnings.push(Component::Scheme, WarningCode::InvalidScheme, s, 0);
-            }
-            SchemeSplit::Absent if s == "*" => {
-                warnings.push(Component::Scheme, WarningCode::Wildcard, s, 0);
-            }
-            SchemeSplit::Absent => {
-                warnings.push(Component::Scheme, WarningCode::MissingScheme, s, 0);
-            }
-        }
-        Ok(warnings.finish(Uri::Other(OtherUri::new(s))))
-    }
-}
-
 impl fmt::Display for Uri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -250,185 +206,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dispatch_sip() {
-        let uri: Uri = "sip:alice@example.com"
-            .parse()
-            .unwrap();
-        assert!(uri
-            .as_sip()
-            .is_some());
-        assert!(uri
-            .as_tel()
-            .is_none());
-        assert!(uri
-            .as_urn()
-            .is_none());
+    fn other_uri_refuses_known_and_invalid_schemes() {
+        assert_eq!(OtherUri::new(Some("SIP"), "alice@example.com"), None);
+        assert_eq!(OtherUri::new(Some("<sip"), "alice@example.com"), None);
+        let other = OtherUri::new(Some("HTTPS"), "//example.com").unwrap();
+        assert_eq!(other.as_str(), "https://example.com");
+        assert_eq!(other.scheme(), Some("https"));
+        let bare = OtherUri::new(None, "*").unwrap();
+        assert_eq!(bare.scheme(), None);
+        assert_eq!(bare.as_str(), "*");
+        assert_eq!(OtherUri::new(None, ""), None);
     }
 
     #[test]
-    fn dispatch_sips() {
-        let uri: Uri = "sips:bob@secure.example.com"
-            .parse()
-            .unwrap();
-        assert!(uri
-            .as_sip()
-            .is_some());
-    }
-
-    #[test]
-    fn dispatch_tel() {
-        let uri: Uri = "tel:+15551234567"
-            .parse()
-            .unwrap();
-        assert!(uri
-            .as_tel()
-            .is_some());
-        assert!(uri
-            .as_sip()
-            .is_none());
-    }
-
-    #[test]
-    fn dispatch_urn() {
-        let uri: Uri = "urn:service:sos"
-            .parse()
-            .unwrap();
-        assert!(uri
-            .as_urn()
-            .is_some());
-        assert!(uri
-            .as_sip()
-            .is_none());
-        assert!(uri
-            .as_tel()
-            .is_none());
-    }
-
-    #[test]
-    fn unknown_scheme_stored_as_other() {
-        let uri: Uri = "http://example.com"
-            .parse()
-            .unwrap();
-        assert_eq!(uri.as_other(), Some("http://example.com"));
-        assert_eq!(uri.scheme(), Some("http"));
-        assert!(uri
-            .as_sip()
-            .is_none());
-        assert!(uri
-            .as_tel()
-            .is_none());
-        assert!(uri
-            .as_urn()
-            .is_none());
-    }
-
-    #[test]
-    fn other_display_roundtrip() {
-        let input = "https://example.com/photo.jpg";
-        let uri: Uri = input
-            .parse()
-            .unwrap();
-        assert_eq!(uri.to_string(), input);
-    }
-
-    #[test]
-    fn missing_scheme_is_other() {
-        let parsed = Uri::parse_with_warnings("no-colon-here").unwrap();
+    fn other_uri_escapes_what_breaks_a_header_line() {
+        let other = OtherUri::new(Some("http"), "//x\r\nVia: <y> \"é\" %zz").unwrap();
         assert_eq!(
-            parsed
-                .value
-                .as_other(),
-            Some("no-colon-here")
+            other.as_str(),
+            "http://x%0D%0AVia:%20%3Cy%3E%20%22%C3%A9%22%20%zz"
         );
+        let rest = other
+            .as_str()
+            .strip_prefix("http:")
+            .unwrap();
+        assert_eq!(OtherUri::new(Some("http"), rest), Some(other.clone()));
         assert_eq!(
-            parsed
-                .value
-                .scheme(),
-            None
+            OtherUri::new(None, "a\u{7f}b")
+                .unwrap()
+                .as_str(),
+            "a%7Fb"
         );
-        assert_eq!(parsed.warnings[0].code, WarningCode::MissingScheme);
-        assert!(""
-            .parse::<Uri>()
-            .is_err());
-    }
-
-    #[test]
-    fn display_roundtrip() {
-        let input = "sip:alice@example.com;transport=tcp";
-        let uri: Uri = input
-            .parse()
-            .unwrap();
-        assert_eq!(uri.to_string(), input);
-    }
-
-    #[test]
-    fn display_roundtrip_urn() {
-        let input = "urn:service:sos";
-        let uri: Uri = input
-            .parse()
-            .unwrap();
-        assert_eq!(uri.to_string(), input);
-    }
-
-    #[test]
-    fn from_sip_uri() {
-        let sip: SipUri = "sip:alice@example.com"
-            .parse()
-            .unwrap();
-        let uri: Uri = sip.into();
-        assert!(uri
-            .as_sip()
-            .is_some());
-    }
-
-    #[test]
-    fn from_urn_uri() {
-        let urn: UrnUri = "urn:service:sos"
-            .parse()
-            .unwrap();
-        let uri: Uri = urn.into();
-        assert!(uri
-            .as_urn()
-            .is_some());
-    }
-
-    #[test]
-    fn user_sip() {
-        let uri: Uri = "sip:alice@example.com"
-            .parse()
-            .unwrap();
-        assert_eq!(uri.user(), Some("alice"));
-    }
-
-    #[test]
-    fn user_sip_no_user() {
-        let uri: Uri = "sip:example.com"
-            .parse()
-            .unwrap();
-        assert_eq!(uri.user(), None);
-    }
-
-    #[test]
-    fn user_tel() {
-        let uri: Uri = "tel:+15551234567"
-            .parse()
-            .unwrap();
-        assert_eq!(uri.user(), Some("+15551234567"));
-    }
-
-    #[test]
-    fn user_urn() {
-        let uri: Uri = "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-            .parse()
-            .unwrap();
-        assert_eq!(uri.user(), None);
-    }
-
-    #[test]
-    fn user_other() {
-        let uri: Uri = "http://example.com"
-            .parse()
-            .unwrap();
-        assert_eq!(uri.user(), None);
     }
 }

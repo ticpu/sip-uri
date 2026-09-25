@@ -1,4 +1,7 @@
-use sip_uri::{Host, Hostname, Scheme, SipUri, TelUri, Uri, UrnUri, WarningCode};
+use sip_uri::{
+    Host, Hostname, OtherUri, Scheme, SipUri, SipUriParts, TelUri, TelUriParts, Uri, UrnUri,
+    UrnUriParts, WarningCode,
+};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 // ========================================================================
@@ -1303,6 +1306,53 @@ fn literal_hash_and_escaped_hash_stay_distinct_in_user() {
     assert_eq!(literal.user(), Some("*#"));
     assert_eq!(escaped.user(), Some("*%23"));
     assert_ne!(literal, escaped);
+}
+
+#[test]
+fn parts_build_what_the_parser_builds() {
+    let parsed: SipUri = "sip:+15551234567;cpc=emergency@example.com;user=phone"
+        .parse()
+        .unwrap();
+    let mut parts = SipUriParts::default();
+    parts.scheme = Some(Scheme::Sip);
+    parts.user = Some("+1555%31234567".into());
+    parts.user_params = vec![("cpc".into(), Some("emergency".into()))];
+    parts.host = Some(Host::Hostname("EXAMPLE.COM".into()));
+    parts.params = vec![("user".into(), Some("phone".into()))];
+    assert_eq!(SipUri::from(parts), parsed);
+    assert_eq!(
+        SipUri::from(
+            parsed
+                .clone()
+                .into_parts()
+        ),
+        parsed
+    );
+
+    let mut tel = TelUriParts::default();
+    tel.number = Some("+15551234567".into());
+    assert_eq!(TelUri::from(tel), TelUri::new("+15551234567"));
+
+    let mut urn = UrnUriParts::default();
+    urn.nid = Some("SERVICE".into());
+    urn.nss = Some("sos".into());
+    assert_eq!(
+        Uri::from(UrnUri::from(urn)),
+        "urn:service:sos"
+            .parse::<Uri>()
+            .unwrap()
+    );
+}
+
+#[test]
+fn other_uri_new_matches_parsed_other() {
+    let parsed: Uri = "HTTPS://example.com/a"
+        .parse()
+        .unwrap();
+    let built = OtherUri::new(Some("https"), "//example.com/a").unwrap();
+    assert_eq!(parsed, Uri::Other(built));
+    assert_eq!(OtherUri::new(Some("tel"), "+15551234567"), None);
+    assert_eq!(OtherUri::new(Some("1x"), "y"), None);
 }
 
 #[test]

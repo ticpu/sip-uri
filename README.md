@@ -36,6 +36,7 @@ sip-uri = "0.3"
 | `TelUri` | tel: URI with number, params, fragment |
 | `UrnUri` | URN with NID, NSS, and optional r/q/f components |
 | `OtherUri` | Text with an unrecognized scheme, or none, kept with its scheme lowercased |
+| `SipUriParts`, `TelUriParts`, `UrnUriParts` | Public-field components; `From` canonizes them into the URI, `into_parts()` gives them back |
 | `Host` | IPv4, IPv6, or `Hostname` (lowercase by construction) |
 | `Scheme` | `Sip` or `Sips` |
 | `ParseError` | `Empty`, `SchemeMismatch`, or `NonConformant` from a strict parse |

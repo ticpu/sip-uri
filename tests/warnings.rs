@@ -350,13 +350,16 @@ fn urn_component_charsets() {
 
 #[test]
 fn uri_invalid_scheme() {
-    for input in ["<sip:alice@example.com>", " sip:alice@example.com"] {
+    for (input, held) in [
+        ("<sip:alice@example.com>", "%3Csip:alice@example.com%3E"),
+        (" sip:alice@example.com", "%20sip:alice@example.com"),
+    ] {
         let parsed = Uri::parse_with_warnings(input).unwrap();
         assert_eq!(
             parsed
                 .value
                 .as_other(),
-            Some(input)
+            Some(held)
         );
         let w = only(
             &parsed.warnings,
