@@ -89,7 +89,8 @@ impl Uri {
         }
     }
 
-    /// The scheme of this URI (lowercase).
+    /// The scheme of this URI: lowercase for the parsed variants, as written
+    /// for [`Uri::Other`].
     pub fn scheme(&self) -> &str {
         match self {
             Uri::Sip(u) => u

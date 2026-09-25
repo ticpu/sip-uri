@@ -72,7 +72,7 @@ impl Host {
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.'))
             {
-                return Err(format!("invalid hostname character in '{decoded}'"));
+                return Err("invalid hostname character".into());
             }
 
             Ok((Host::Hostname(decoded.to_ascii_lowercase()), end))
@@ -172,8 +172,7 @@ impl FromStr for Host {
         let (host, consumed) = Host::parse_from_uri(s).map_err(ParseHostError)?;
         if consumed != s.len() {
             return Err(ParseHostError(format!(
-                "trailing content after host: '{}'",
-                &s[consumed..]
+                "trailing content after host at position {consumed}"
             )));
         }
         Ok(host)

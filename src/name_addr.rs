@@ -157,14 +157,14 @@ impl FromStr for NameAddr {
 /// SIP header field grammar, not `name-addr`. Callers must split those off
 /// before parsing.
 fn reject_trailing(s: &str) -> Result<(), ParseNameAddrError> {
-    let trimmed = s.trim();
-    if trimmed.is_empty() {
+    if s.trim()
+        .is_empty()
+    {
         Ok(())
     } else {
-        Err(ParseNameAddrError(format!(
-            "trailing content after '>': \"{trimmed}\" \
-             (header-level parameters belong in SIP header parsing, not name-addr)"
-        )))
+        Err(ParseNameAddrError(
+            "trailing content after '>' (header-level parameters belong in SIP header parsing, not name-addr)".into(),
+        ))
     }
 }
 

@@ -68,7 +68,7 @@ pub(crate) fn parse_headers(s: &str) -> Result<Vec<(String, String)>, String> {
             }
             headers.push((canonize_header(name), canonize_header(value)));
         } else {
-            return Err(format!("header missing '=' in '{part}'"));
+            return Err("header missing '='".into());
         }
     }
 

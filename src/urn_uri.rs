@@ -109,10 +109,11 @@ fn validate_nid(nid: &str) -> Result<(), String> {
     if !bytes[len - 1].is_ascii_alphanumeric() {
         return Err("NID must end with alphanumeric character".into());
     }
-    for &b in &bytes[1..len - 1] {
-        if !b.is_ascii_alphanumeric() && b != b'-' {
-            return Err(format!("NID contains invalid character '{}'", b as char));
-        }
+    if let Some(pos) = bytes[1..len - 1]
+        .iter()
+        .position(|&b| !b.is_ascii_alphanumeric() && b != b'-')
+    {
+        return Err(format!("invalid character in NID at position {}", pos + 1));
     }
 
     Ok(())
@@ -248,10 +249,7 @@ fn parse_rq_components(s: &str) -> Result<(Option<String>, Option<String>), Stri
             // q-component only (no r-component)
             Ok((None, Some(s[2..].to_string())))
         }
-        _ => Err(format!(
-            "unexpected '?{}' in URN (expected '?+' or '?=')",
-            s.as_bytes()[1] as char
-        )),
+        _ => Err("'?' in URN not followed by '+' or '='".into()),
     }
 }
 

@@ -232,7 +232,7 @@ impl FromStr for SipUri {
         } else if scheme_str.eq_ignore_ascii_case("sips") {
             Scheme::Sips
         } else {
-            return Err(err(&format!("unknown scheme '{scheme_str}'")));
+            return Err(err("scheme is not sip or sips"));
         };
 
         let rest = &input[colon_pos + 1..];
@@ -351,7 +351,7 @@ fn parse_hostport_params_headers(s: &str) -> HostportResult {
         } else {
             let port: u16 = port_str
                 .parse()
-                .map_err(|_| err(&format!("invalid port '{port_str}'")))?;
+                .map_err(|_| err("port is not a number in 0-65535"))?;
             (Some(port), &rest[end..])
         }
     } else {
@@ -384,9 +384,7 @@ fn parse_hostport_params_headers(s: &str) -> HostportResult {
     } else if rest.is_empty() {
         ("", None)
     } else {
-        return Err(err(&format!(
-            "unexpected character after host/port: '{rest}'"
-        )));
+        return Err(err("unexpected character after host/port"));
     };
 
     let uri_params =
@@ -418,6 +416,8 @@ impl fmt::Display for SipUri {
             }
 
             write!(f, "@")?;
+        } else if let Some(ref pwd) = self.password {
+            write!(f, ":{pwd}@")?;
         }
 
         // Host
@@ -638,6 +638,15 @@ mod tests {
             uri.to_string(),
             "sips:user:pass@host:32;param=1?From=foo@bar&To=bar@baz"
         );
+    }
+
+    #[test]
+    fn display_keeps_password_without_user() {
+        let uri: SipUri = "sip::pass@host"
+            .parse()
+            .unwrap();
+        assert_eq!(uri.password(), Some("pass"));
+        assert_eq!(uri.to_string(), "sip::pass@host");
     }
 
     #[test]
