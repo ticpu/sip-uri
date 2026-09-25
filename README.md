@@ -35,8 +35,12 @@ sip-uri = "0.2"
 | `SipUri` | SIP or SIPS URI with user, host, port, params, headers, fragment |
 | `TelUri` | tel: URI with number, params, fragment |
 | `UrnUri` | URN with NID, NSS, and optional r/q/f components |
-| `Uri` | Enum dispatching `Sip` / `Tel` / `Urn` / `Other` based on scheme |
-| `Host` | IPv4, IPv6, or hostname |
+| `OtherUri` | Text with an unrecognized scheme, or none, kept with its scheme lowercased |
+| `Host` | IPv4, IPv6, or `Hostname` (lowercase by construction) |
+| `Scheme` | `Sip` or `Sips` |
+| `ParseError` | `Empty`, `SchemeMismatch`, or `NonConformant` from a strict parse |
+| `Parsed` / `ParseWarning` | Value plus the grammar breaches the parser accepted |
+| `Redaction` | What `redacted()` masks when a URI is rendered for logs |
 | `Scheme` | `Sip` or `Sips` |
 
 All types implement `FromStr`, `Display`, `Debug`, `Clone`, `PartialEq`, and `Eq`.
@@ -217,6 +221,48 @@ assert_eq!(parsed.value.port(), Some(5060));
 assert_eq!(parsed.warnings[0].component, Component::Port);
 assert_eq!(parsed.warnings[0].code, WarningCode::SignedPort);
 ```
+
+`parse_strict` runs the same parser and returns the first warning as
+`ParseError::NonConformant`, for callers that must refuse non-conformant
+input.
+
+## Logging
+
+`Display` writes the user part and password. For logs, `redacted()` renders
+through a `Redaction`: by default the whole userinfo, or a tel: number, becomes
+`***`, and the caller relaxes that per deployment policy.
+
+```rust
+use sip_uri::{Redaction, SipUri, UserMask};
+
+let uri: SipUri = "sip:+15551234567:pw@example.com".parse().unwrap();
+assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com");
+let keep4 = Redaction::default().user(UserMask::KeepLast(4)).drop_headers();
+assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
+```
+
+## Migrating from 0.2
+
+| 0.2 | 0.3 |
+|---|---|
+| `NameAddr` | `sip_header::SipHeaderAddr`, or `Uri` for a bare URI |
+| `ParseSipUriError`, `ParseTelUriError`, `ParseUrnError`, `ParseHostError`, `ParseUriError` | `ParseError` |
+| `"joe@example.com".parse::<SipUri>()` is `Err` | `Ok`, scheme `None`, `MissingScheme` warning |
+| `SipUri::scheme() -> Scheme`, `host() -> &Host` | `Option<Scheme>`, `Option<&Host>` |
+| `TelUri::number() -> &str` | `Option<&str>` |
+| `UrnUri::nid()`, `nss() -> &str` | `Option<&str>`, so `urn.nid() == Some("service")` |
+| `Uri::scheme() -> &str` | `Option<&str>`, lowercase for every variant |
+| `Uri::Other(String)` | `Uri::Other(OtherUri)`; `as_other()` and `into_other()` unchanged |
+| `Host::Hostname(String)` | `Host::Hostname(Hostname)`; `"x".into()` still builds one |
+| `param()` / `TelUri::param() -> Option<&Option<String>>` | `Option<Option<&str>>`; compare with `Some(Some("tcp"))` |
+| `Host::fmt_uri(f)` | `Display` |
+| builders emit their input verbatim | builders escape delimiters, keep `%XX` |
+| `%3B` in a user part, `%40` in a URI param decoded | kept escaped, so Display round-trips |
+| `"*".parse::<Uri>()` is `Err` | `Uri::Other` with a `Wildcard` warning |
+
+Code that used `let Ok(uri) = s.parse() else { reject }` to refuse malformed
+input now accepts it; use `parse_strict`, or check `parse_with_warnings`'s
+warnings, where conformance decides what happens next.
 
 ## Design
 
