@@ -1,13 +1,10 @@
 ## Project Type
 
-Zero-dependency SIP/tel/URN URI parser library. RFC 3261 (SIP/SIPS),
-RFC 3966 (tel:), and RFC 8141 (URN).
+Zero-dependency SIP/tel/URN URI parser library: RFC 3261 (SIP/SIPS), RFC 3966 (tel:), RFC 8141 (URN). Decisions and their reasons live in `docs/design-rationale.md`.
 
 ## No PII or Organization-Specific Data
 
-**NEVER** include real phone numbers, real hostnames, organization names,
-internal URLs, or any other PII in source code, tests, or documentation.
-Use RFC-compliant test values only:
+**NEVER** include real phone numbers, real hostnames, organization names, internal URLs, or any other PII in source code, tests, or documentation. Use RFC-compliant test values only:
 
 - Phone numbers: `+1555xxxxxxx` (555 prefix)
 - IPv4: `198.51.100.x` or `203.0.113.x` (RFC 5737 TEST-NET)
@@ -16,72 +13,22 @@ Use RFC-compliant test values only:
 - Organization names: "EXAMPLE CO", generic descriptions
 - URN identifiers: synthetic hashes, `TEST` prefixes
 
-The pre-commit hook runs gitleaks to enforce this.
+The pre-commit hook runs gitleaks on staged content and refuses to commit without it.
 
-## Build & Test
+## New RFC checks warn, never reject
 
-```sh
-cargo fmt --all
-cargo check --message-format=short
-cargo clippy --fix --allow-dirty --message-format=short
-cargo test
-```
+A grammar check added to a parser pushes a `ParseWarning`; it never turns accepted input into an `Err`.
 
-## `#[non_exhaustive]` Policy
+## `#[non_exhaustive]` on every public enum and public-field struct
 
-Same as freeswitch-esl-tokio: all public enums and public-field structs get
-`#[non_exhaustive]`. Single-field error newtypes are exempt.
+Single-field error newtypes are exempt.
 
-## Key Design Decisions
-
-- Hand-written parser, no regex or nom -- the grammar is regular, deps are zero
-- Per-component percent-encoding per RFC 3261 §25 ABNF
-- SIP user-part allows `;/?/` unescaped (user-unreserved)
-- User-params (`;` within userinfo before `@`) split out from user -- this is the
-  correct parse of the `telephone-subscriber` production in userinfo, not a feature
-  gate decision. Users who want the raw unsplit string reconstruct from `user()` +
-  `user_params()`. Sofia-sip's flat approach is a C-level simplification.
-- `@` discovery: sofia-sip two-phase algorithm -- scan to first `@/;?#`, then scan
-  forward for `@`. Handles `?` and `/` in user-part correctly.
-- Password split on first `:` within userinfo (`:` is NOT in user-unreserved)
-- Param name comparison is case-insensitive per RFC 3261 §19.1.4
-- Host names are lowercased on parse
-- Scheme stored and compared case-insensitively (`SIP:` accepted, stored as `sip`)
-- `param-unreserved` extended with `@` and `,` for real-world SIP compatibility
-  (sofia-sip torture tests include these in URI params)
-- Display round-trip: `parse(display(x)) == x` for canonical forms. Note:
-  canonization is lossy (percent-encoding normalization), so
-  `display(parse(raw)) != raw` but `parse(display(parse(raw))) == parse(raw)`
-- No `assert!/unwrap()` in library code -- same correctness-over-recovery policy
-  as freeswitch-esl-tokio
+## No `assert!` / `unwrap()` in library code
 
 ## Scope Boundary
 
-This crate parses **URIs only** — the `addr-spec` and `name-addr`
-productions from RFC 3261 §25. It does NOT handle SIP header field
-grammar.
-
-Anything involving percent-encoded SIP header values (`;tag=`,
-`;serviceurn=`, `;expires=`, `*(SEMI generic-param)` after `>`) belongs
-in a higher-level SIP header parser (e.g., sip-header), not here.
-If a test value contains percent-encoded header-level parameters, that's
-a red flag — it's header grammar leaking into the URI layer.
-
-`NameAddr` must reject trailing content after `>` rather than silently
-discarding it. The caller is responsible for splitting header-level
-params before passing the name-addr portion to this crate.
-
-`NameAddr` is deprecated since 0.2.0 and must be removed in 0.3.0.
+URIs only (`addr-spec`, `name-addr`), never SIP header field grammar. A test value with percent-encoded header-level params (`;tag=`, `;serviceurn=`) is header grammar leaking in. `NameAddr` is deprecated since 0.2.0 and must be removed in 0.3.0.
 
 ## Release Workflow
 
-Use `/release` (`.claude/commands/release.md`) — it owns the pre-release
-checks, changelog, tagging, and publish steps. Do not duplicate them here.
-
-## Character Classes (RFC 3261 §25)
-
-- `unreserved = ALPHA / DIGIT / mark`
-- `mark = "-" / "_" / "." / "!" / "~" / "*" / "'" / "(" / ")"`
-- `user-unreserved = "&" / "=" / "+" / "$" / "," / ";" / "?" / "/"`
-- `param-unreserved = "[" / "]" / "/" / ":" / "&" / "+" / "$"`
-- `hnv-unreserved = "[" / "]" / "/" / "?" / ":" / "+" / "$"`
+Use `/release` (`.claude/commands/release.md`); it owns the checks, changelog, tagging and publish steps.

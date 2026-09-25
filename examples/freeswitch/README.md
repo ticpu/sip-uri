@@ -113,13 +113,14 @@ Where the parse should be recorded rather than just tested — so that `info`,
 ```
 
 `sip:+15551234567;cpc=emergency@198.51.100.1;user=phone` then sets
-`uri_type`, `uri_scheme`, `uri_user`, `uri_host`, `uri_uparam_cpc` and
-`uri_param_user`. Absent components are not emitted, so they stay unset.
+`uri_type`, `uri_scheme`, `uri_user`, `uri_host`, `uri_uparam_cpc`,
+`uri_param_user` and `uri_keys`. Absent components are not emitted, so they
+stay unset.
 
 The `^^|` prefix tells `multiset` to split the payload on `|` instead of a
-space. That delimiter cannot be assumed safe: `canonize_user` decodes `%3B` and
-`%3D`, so a user part can legitimately contain `;` or `=`, and the parser
-accepts a raw `|` in a user part as well. Rather than emit a payload that would
+space. That delimiter cannot be assumed safe: the parser decodes `%3B` and
+`%3D` in a user part, so it can legitimately contain `;` or `=`, and a raw `|`
+in a user part is accepted as well. Rather than emit a payload that would
 silently set an unintended variable, `vars` refuses:
 
 ```

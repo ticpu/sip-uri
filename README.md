@@ -41,8 +41,11 @@ sip-uri = "0.2"
 | `Scheme` | `Sip` or `Sips` |
 
 All types implement `FromStr`, `Display`, `Debug`, `Clone`, `PartialEq`, and `Eq`.
-Parsing is case-insensitive for schemes, hosts, and parameter names.
-`Display` output round-trips through `FromStr`.
+Schemes and hosts are case-insensitive and stored lowercase; parameter and
+header lookup is case-insensitive. `PartialEq` is structural, not RFC 3261
+§19.1.4 URI equivalence: parameter order and name case count. `Display` emits
+the canonical form, so `parse(display(parse(x))) == parse(x)`, though
+`display(parse(x))` need not equal `x`.
 
 ## SipUri
 
@@ -213,17 +216,16 @@ assert_eq!(decode_user("%2B15551234567").as_ref(), b"+15551234567");
   algorithm for correct handling of reserved characters in user-parts.
 - **Case-insensitive where required** -- scheme and parameter name lookup are
   case-insensitive per RFC. Host names are lowercased.
-- **`#[non_exhaustive]`** -- on `Uri`, `Host`, and `Scheme` enums for
-  forward-compatible matching.
+- **`#[non_exhaustive]`** -- on every public enum and public-field struct.
 - **Fragment support** -- `SipUri` and `TelUri` parse and round-trip `#fragment`
   components (accepted permissively, matching sofia-sip behavior).
 - **Any-scheme fallback** -- `Uri::Other` stores unrecognized schemes (http,
-  https, data, etc.) as raw strings, so `NameAddr` can parse SIP headers like
-  `Call-Info` that carry non-SIP URIs.
+  https, data, etc.) as raw strings, so header values like `Call-Info` that
+  carry non-SIP URIs still parse.
 
 ## RFC coverage
 
-- **RFC 3261 19/25** -- SIP-URI, SIPS-URI syntax, comparison, percent-encoding
+- **RFC 3261 19/25** -- SIP-URI, SIPS-URI syntax, percent-encoding
 - **RFC 3966** -- tel-URI (global/local numbers, visual separators, parameters)
 - **RFC 8141** -- URN syntax (NID, NSS, r/q/f components)
 
@@ -242,12 +244,8 @@ cargo build --profile release-min --target x86_64-unknown-linux-musl --example f
 
 ## Development
 
-```sh
-cargo fmt --all
-cargo clippy --message-format=short
-RUSTDOCFLAGS="-D missing_docs -D rustdoc::broken_intra_doc_links" cargo doc --no-deps
-cargo test
-```
+`hooks/install.sh` links the pre-commit hook, which runs fmt, clippy, doc
+coverage, tests and gitleaks on every commit.
 
 ## Other Rust SIP URI crates
 
