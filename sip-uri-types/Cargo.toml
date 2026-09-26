@@ -12,4 +12,14 @@ readme = "README.md"
 keywords = ["sip", "uri", "voip", "tel", "urn"]
 categories = ["data-structures", "network-programming"]
 
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+serde = ["dep:serde"]
+
 [dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+serde_json = "1"

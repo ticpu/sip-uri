@@ -2,6 +2,13 @@
 //!
 //! Parse text into these types with [sip-uri](https://docs.rs/sip-uri).
 //!
+//! The `serde` feature serializes each value as its parts, and deserializes
+//! them through the same canonizing constructor as [`From`] a parts struct.
+//! A [`Host`] reads a hostname through [`Host::from_hostname`]. The shape is
+//! under the same semver as the fields: a field added to a parts struct is a
+//! minor release, missing fields take their defaults, unknown ones are
+//! ignored, and a SIP URI read without `scheme` has none.
+//!
 //! ```
 //! use sip_uri_types::{Host, SipUri, TelUri};
 //!
@@ -35,6 +42,8 @@
 mod canon;
 mod host;
 mod params;
+#[cfg(feature = "serde")]
+mod serde_impls;
 mod sip_uri;
 mod tel_uri;
 mod uri;

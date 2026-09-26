@@ -10,6 +10,11 @@ use crate::params;
 /// parameter RFC 3966 requires is still a value, and a missing number is
 /// `None`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(from = "TelUriParts", into = "TelUriParts")
+)]
 #[non_exhaustive]
 pub struct TelUri {
     number: Option<String>,
@@ -19,6 +24,11 @@ pub struct TelUri {
 
 /// The components of a [`TelUri`], each canonized on conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[non_exhaustive]
 pub struct TelUriParts {
     /// The telephone number, `+` first for a global one.
@@ -44,6 +54,12 @@ impl From<TelUriParts> for TelUri {
                 .filter(|f| !f.is_empty())
                 .map(canon::canonize_fragment),
         }
+    }
+}
+
+impl From<TelUri> for TelUriParts {
+    fn from(uri: TelUri) -> Self {
+        uri.into_parts()
     }
 }
 

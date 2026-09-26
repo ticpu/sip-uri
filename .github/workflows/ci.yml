@@ -17,8 +17,11 @@ jobs:
 
     # Lib only: dev-dependencies are free to require a newer toolchain than
     # what we promise published consumers.
-    - name: Read rust-version from Cargo.toml
-      run: echo "MSRV=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].rust_version')" >> "$GITHUB_ENV"
+    - name: Read rust-version and serde-rust-version from Cargo.toml
+      run: |
+        cargo metadata --no-deps --format-version 1 > metadata.json
+        echo "MSRV=$(jq -r '.packages[0].rust_version' metadata.json)" >> "$GITHUB_ENV"
+        echo "SERDE_MSRV=$(jq -r '.metadata["serde-rust-version"]' metadata.json)" >> "$GITHUB_ENV"
 
     - uses: dtolnay/rust-toolchain@master
       with:
@@ -26,6 +29,10 @@ jobs:
 
     - name: Check
       run: cargo check --workspace
+
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.SERDE_MSRV }}
 
     - name: Check with all features
       run: cargo check --workspace --all-features

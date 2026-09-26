@@ -11,6 +11,11 @@ use crate::canon;
 /// decodes an escape; escape hex is uppercase, and a byte outside the
 /// component's grammar is escaped. A missing NID or NSS is `None`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(from = "UrnUriParts", into = "UrnUriParts")
+)]
 #[non_exhaustive]
 pub struct UrnUri {
     nid: Option<String>,
@@ -22,6 +27,11 @@ pub struct UrnUri {
 
 /// The components of a [`UrnUri`], each canonized on conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[non_exhaustive]
 pub struct UrnUriParts {
     /// The namespace identifier.
@@ -62,6 +72,12 @@ impl From<UrnUriParts> for UrnUri {
                 .as_deref()
                 .map(canon::canonize_fragment),
         }
+    }
+}
+
+impl From<UrnUri> for UrnUriParts {
+    fn from(uri: UrnUri) -> Self {
+        uri.into_parts()
     }
 }
 

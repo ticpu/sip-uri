@@ -12,6 +12,11 @@ use crate::urn_uri::UrnUri;
 /// `https:`, `data:`, or text without a scheme), so header values like
 /// `Call-Info` round-trip without rejecting non-SIP URIs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "lowercase")
+)]
 #[non_exhaustive]
 pub enum Uri {
     /// SIP or SIPS URI.

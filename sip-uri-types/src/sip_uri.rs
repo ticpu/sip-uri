@@ -10,6 +10,11 @@ use crate::params::{self, Params};
 /// password, IPv6 hosts, URI parameters, and headers. A scheme or host that
 /// is missing or unreadable is `None`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(from = "SipUriParts", into = "SipUriParts")
+)]
 #[non_exhaustive]
 pub struct SipUri {
     scheme: Option<Scheme>,
@@ -25,6 +30,11 @@ pub struct SipUri {
 
 /// The components of a [`SipUri`], each canonized on conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(default)
+)]
 #[non_exhaustive]
 pub struct SipUriParts {
     /// `sip` or `sips`.
@@ -83,6 +93,12 @@ impl From<SipUriParts> for SipUri {
     }
 }
 
+impl From<SipUri> for SipUriParts {
+    fn from(uri: SipUri) -> Self {
+        uri.into_parts()
+    }
+}
+
 /// An empty user prints as a bare `@`, which parses as no userinfo, unless
 /// user-params follow it; user-params print only after a user.
 fn hold_user(user: Option<String>, user_params: &Params) -> Option<String> {
@@ -95,6 +111,11 @@ fn hold_user(user: Option<String>, user_params: &Params) -> Option<String> {
 
 /// SIP URI scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "lowercase")
+)]
 #[non_exhaustive]
 pub enum Scheme {
     /// `sip:` (default port 5060)

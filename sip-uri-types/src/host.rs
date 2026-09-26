@@ -9,6 +9,11 @@ use crate::canon;
 /// and [`Host::bare`] renders without. A URI holds a hostname that reads as
 /// an IPv4 address as [`Host::IPv4`], as [`Host::from_hostname`] does.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "lowercase", from = "crate::serde_impls::HostRepr")
+)]
 #[non_exhaustive]
 pub enum Host {
     /// IPv4 address.

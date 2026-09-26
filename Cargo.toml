@@ -9,6 +9,10 @@ authors = ["Jérôme Poulin <jeromepoulin@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ticpu/sip-uri"
 
+# serde_derive's proc-macro dependencies need a newer toolchain than the crates.
+[workspace.metadata]
+serde-rust-version = "1.71"
+
 [package]
 name = "sip-uri"
 version = "0.2.9"
