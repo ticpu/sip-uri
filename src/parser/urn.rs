@@ -58,10 +58,10 @@ pub(crate) fn parse(input: &str) -> Result<Parsed<UrnUri>, ParseError> {
         }
     };
 
-    let (nid_str, after_nid) = match rest.split_once(':') {
-        Some((nid, after)) => (nid, Some(after)),
-        None => (rest, None),
-    };
+    let (nid_str, after_nid) = rest.split_at(nid_end(rest));
+    let after_nid = after_nid
+        .strip_prefix(':')
+        .unwrap_or(after_nid);
     if nid_str.is_empty() {
         warnings.push(Component::Nid, WarningCode::MissingNid, nid_str, 0);
     } else {
@@ -70,8 +70,6 @@ pub(crate) fn parse(input: &str) -> Result<Parsed<UrnUri>, ParseError> {
         }
         parts.nid = Some(nid_str.to_string());
     }
-
-    let after_nid = after_nid.unwrap_or_default();
 
     // `#` appears in no component, so the first one starts the fragment.
     let before_fragment = match after_nid.split_once('#') {
@@ -130,6 +128,19 @@ pub(crate) fn parse(input: &str) -> Result<Parsed<UrnUri>, ParseError> {
     parts.q_component = q_component.map(str::to_string);
 
     Ok(warnings.finish(UrnUri::from(parts)))
+}
+
+/// The NID ends at the `:` before the NSS, or, with the NSS missing, where an
+/// r-, q- or f-component starts: `ldh` holds none of `:?#`.
+fn nid_end(s: &str) -> usize {
+    let bytes = s.as_bytes();
+    (0..bytes.len())
+        .find(|&i| match bytes[i] {
+            b':' | b'#' => true,
+            b'?' => matches!(bytes.get(i + 1), Some(b'+' | b'=')),
+            _ => false,
+        })
+        .unwrap_or(bytes.len())
 }
 
 /// RFC 8141: r-, q- and f-components are `*( pchar / "/" / "?" )`.
@@ -348,6 +359,41 @@ mod tests {
                 "{input}"
             );
         }
+    }
+
+    #[test]
+    fn missing_nss_ends_the_nid_at_the_next_component() {
+        for (input, r, q, f) in [
+            ("urn:example?+r", Some("r"), None, None),
+            ("urn:example?=q", None, Some("q"), None),
+            ("urn:example#f:g", None, None, Some("f:g")),
+            ("urn:?+r?=q#f", Some("r"), Some("q"), Some("f")),
+        ] {
+            let parsed = UrnUri::parse_with_warnings(input).unwrap();
+            let urn = &parsed.value;
+            assert_eq!(urn.nss(), None, "{input}");
+            assert_eq!(
+                (urn.r_component(), urn.q_component(), urn.f_component()),
+                (r, q, f),
+                "{input}"
+            );
+            assert!(parsed
+                .warnings
+                .iter()
+                .any(|w| w.code == WarningCode::MissingNss));
+        }
+        assert_eq!(
+            UrnUri::parse("urn:example#f")
+                .unwrap()
+                .nid(),
+            Some("example")
+        );
+        assert_eq!(
+            UrnUri::parse("urn:ab?c:d")
+                .unwrap()
+                .nid(),
+            Some("ab%3Fc")
+        );
     }
 
     #[test]
