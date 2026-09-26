@@ -177,7 +177,7 @@ let urn = UrnUri::parse("urn:example:resource?+resolve?=query#section").unwrap()
 assert_eq!(urn.r_component(), Some("resolve"));
 assert_eq!(urn.q_component(), Some("query"));
 assert_eq!(urn.f_component(), Some("section"));
-assert_eq!(urn.assigned_name(), "urn:example:resource");
+assert_eq!(urn.assigned_name().to_string(), "urn:example:resource");
 ```
 
 NID is validated per RFC 8141 (2-32 chars, alphanum bookends) and stored

@@ -153,27 +153,41 @@ impl UrnUri {
             .as_deref()
     }
 
-    /// The assigned-name portion (`urn:NID:NSS`) without optional components.
-    pub fn assigned_name(&self) -> String {
-        let mut s = String::from("urn:");
-        push_assigned(&mut s, self.nid(), self.nss());
-        s
+    /// Render the assigned name, `urn:NID:NSS`, as [`fmt::Display`] writes
+    /// it, without the r-, q- and f-components.
+    ///
+    /// ```
+    /// use sip_uri_types::UrnUri;
+    ///
+    /// let urn = UrnUri::new("service", "sos").with_q_component("x");
+    /// assert_eq!(urn.assigned_name().to_string(), "urn:service:sos");
+    /// ```
+    pub fn assigned_name(&self) -> AssignedName<'_> {
+        AssignedName(self)
     }
 }
 
-fn push_assigned(out: &mut String, nid: Option<&str>, nss: Option<&str>) {
-    out.push_str(nid.unwrap_or_default());
-    if let Some(nss) = nss {
-        out.push(':');
-        out.push_str(nss);
+/// [`fmt::Display`] adapter returned by [`UrnUri::assigned_name`].
+#[derive(Debug, Clone, Copy)]
+pub struct AssignedName<'a>(&'a UrnUri);
+
+impl fmt::Display for AssignedName<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let urn = self.0;
+        f.write_str("urn:")?;
+        if let Some(ref nid) = urn.nid {
+            f.write_str(nid)?;
+        }
+        if let Some(ref nss) = urn.nss {
+            write!(f, ":{nss}")?;
+        }
+        Ok(())
     }
 }
 
 impl fmt::Display for UrnUri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut assigned = String::from("urn:");
-        push_assigned(&mut assigned, self.nid(), self.nss());
-        f.write_str(&assigned)?;
+        write!(f, "{}", self.assigned_name())?;
         if let Some(ref r) = self.r_component {
             write!(f, "?+{r}")?;
         }

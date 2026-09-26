@@ -299,21 +299,43 @@ impl SipUri {
             .as_deref()
     }
 
-    /// Convenience: `user@host:port`, with each absent part left out.
-    pub fn user_host(&self) -> String {
-        let mut s = String::new();
-        if let Some(ref u) = self.user {
-            s.push_str(u);
-            s.push('@');
+    /// Render `user@host:port` as [`fmt::Display`] writes those components,
+    /// each absent one left out: no scheme, user-params, password, params,
+    /// headers or fragment.
+    ///
+    /// ```
+    /// use sip_uri_types::{Host, SipUri};
+    ///
+    /// let uri = SipUri::new(Host::IPv6("2001:db8::1".parse().unwrap()))
+    ///     .with_user("alice")
+    ///     .with_user_param("cpc", Some("ordinary".into()))
+    ///     .with_password("pw")
+    ///     .with_port(5060)
+    ///     .with_param("transport", Some("tcp".into()));
+    /// assert_eq!(uri.user_host().to_string(), "alice@[2001:db8::1]:5060");
+    /// ```
+    pub fn user_host(&self) -> UserHost<'_> {
+        UserHost(self)
+    }
+}
+
+/// [`fmt::Display`] adapter returned by [`SipUri::user_host`].
+#[derive(Debug, Clone, Copy)]
+pub struct UserHost<'a>(&'a SipUri);
+
+impl fmt::Display for UserHost<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let uri = self.0;
+        if let Some(ref user) = uri.user {
+            write!(f, "{user}@")?;
         }
-        if let Some(ref host) = self.host {
-            s.push_str(&host.to_string());
+        if let Some(ref host) = uri.host {
+            write!(f, "{host}")?;
         }
-        if let Some(p) = self.port {
-            s.push(':');
-            s.push_str(&p.to_string());
+        if let Some(port) = uri.port {
+            write!(f, ":{port}")?;
         }
-        s
+        Ok(())
     }
 }
 

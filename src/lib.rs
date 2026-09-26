@@ -49,7 +49,8 @@ pub use parser::UriParse;
 pub use redact::{Redacted, Redaction, UriRedact, UserMask};
 pub use sip_uri_types;
 pub use sip_uri_types::{
-    decode_user, encode_uri_header, Bare, Headers, Host, Hostname, OtherUri, Pairs, Params, Scheme,
-    SipUri, SipUriParts, TelUri, TelUriParts, Uri, UrnUri, UrnUriParts, UserParams,
+    decode_user, encode_uri_header, AssignedName, Bare, Headers, Host, Hostname, OtherUri, Pairs,
+    Params, Scheme, SipUri, SipUriParts, TelUri, TelUriParts, Uri, UrnUri, UrnUriParts, UserHost,
+    UserParams,
 };
 pub use warning::{Component, ParseWarning, Parsed, WarningCode, WarningKind};

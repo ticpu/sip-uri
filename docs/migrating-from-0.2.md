@@ -220,6 +220,15 @@ assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
 
 A new `serde` feature serializes a value as its parts and deserializes it through the same canonizing constructor. To read and write a URI as text instead, use the adapters in `sip_uri::serde_str` with `#[serde(with = …)]`. The [README](../README.md#serde) shows both forms.
 
+## Partial renderings are `Display` adapters
+
+| 0.2 | 0.3 |
+|---|---|
+| `SipUri::user_host() -> String` | `UserHost<'_>`: user part, host and port, without user-params or password; `to_string()` gives the text |
+| `UrnUri::assigned_name() -> String` | `AssignedName<'_>`: `urn:NID:NSS`; `to_string()` gives the text |
+
+Each writes into a formatter without allocating, as `Host::bare()` does.
+
 ## Removed
 
 | 0.2 | 0.3 |

@@ -52,10 +52,10 @@ mod urn_uri;
 pub use canon::{decode_user, encode_uri_header};
 pub use host::{Bare, Host, Hostname};
 pub use params::{Headers, Pairs, Params, UserParams};
-pub use sip_uri::{Scheme, SipUri, SipUriParts};
+pub use sip_uri::{Scheme, SipUri, SipUriParts, UserHost};
 pub use tel_uri::{TelUri, TelUriParts};
 pub use uri::{OtherUri, Uri};
-pub use urn_uri::{UrnUri, UrnUriParts};
+pub use urn_uri::{AssignedName, UrnUri, UrnUriParts};
 
 #[cfg(test)]
 mod tests {
@@ -81,5 +81,7 @@ mod tests {
         is_send_sync_unpin::<UserParams>();
         is_send_sync_unpin::<Headers>();
         is_send_sync_unpin::<Pairs<'static>>();
+        is_send_sync_unpin::<UserHost<'static>>();
+        is_send_sync_unpin::<AssignedName<'static>>();
     }
 }

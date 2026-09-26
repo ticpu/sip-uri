@@ -386,8 +386,12 @@ mod tests {
 
     #[test]
     fn user_host_convenience() {
-        let uri = SipUri::parse("sip:alice@example.com:5060").unwrap();
-        assert_eq!(uri.user_host(), "alice@example.com:5060");
+        let uri = SipUri::parse("sip:alice;cpc=x:pw@example.com:5060;lr?h=v").unwrap();
+        assert_eq!(
+            uri.user_host()
+                .to_string(),
+            "alice@example.com:5060"
+        );
     }
 
     #[test]

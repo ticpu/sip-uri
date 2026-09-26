@@ -299,7 +299,11 @@ mod tests {
     #[test]
     fn assigned_name() {
         let urn = UrnUri::parse("urn:service:sos?+r?=q#f").unwrap();
-        assert_eq!(urn.assigned_name(), "urn:service:sos");
+        assert_eq!(
+            urn.assigned_name()
+                .to_string(),
+            "urn:service:sos"
+        );
     }
 
     #[test]

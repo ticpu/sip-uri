@@ -878,7 +878,8 @@ fn urn_emergency_callid() {
     .unwrap();
     assert_eq!(urn.nid(), Some("emergency"));
     assert_eq!(
-        urn.assigned_name(),
+        urn.assigned_name()
+            .to_string(),
         "urn:emergency:callid:a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6:bcf.ng911.example.com"
     );
 }
