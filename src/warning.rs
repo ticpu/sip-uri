@@ -179,7 +179,7 @@ pub enum WarningCode {
     InvalidPort,
     /// Text after the host or port that starts no component, dropped.
     TrailingContent,
-    /// A URI header with no `=`, read as an empty value.
+    /// A URI header with no `=`, held without a value.
     MissingValue,
     /// An empty user before user-params.
     EmptyUser,

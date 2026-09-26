@@ -1,5 +1,6 @@
 use std::fmt;
 
+use sip_uri_types::Pairs;
 use sip_uri_types::SipUri;
 use sip_uri_types::TelUri;
 use sip_uri_types::Uri;
@@ -141,11 +142,7 @@ fn write_masked_user(f: &mut fmt::Formatter<'_>, user: &str, mask: UserMask) -> 
     }
 }
 
-fn write_params(
-    f: &mut fmt::Formatter<'_>,
-    params: &[(String, Option<String>)],
-    how: &Redaction<'_>,
-) -> fmt::Result {
+fn write_params(f: &mut fmt::Formatter<'_>, params: Pairs<'_>, how: &Redaction<'_>) -> fmt::Result {
     for (name, value) in params {
         write!(f, ";{name}")?;
         match value {
@@ -175,7 +172,12 @@ impl fmt::Display for Redacted<'_, SipUri> {
             } else {
                 if let Some(user) = uri.user() {
                     write_masked_user(f, user, how.user)?;
-                    write_params(f, uri.user_params(), how)?;
+                    write_params(
+                        f,
+                        uri.user_params()
+                            .iter(),
+                        how,
+                    )?;
                 }
                 if uri
                     .password()
@@ -192,7 +194,12 @@ impl fmt::Display for Redacted<'_, SipUri> {
         if let Some(port) = uri.port() {
             write!(f, ":{port}")?;
         }
-        write_params(f, uri.params(), how)?;
+        write_params(
+            f,
+            uri.params()
+                .iter(),
+            how,
+        )?;
         if !how.drop_headers {
             for (i, (name, value)) in uri
                 .headers()
@@ -200,7 +207,10 @@ impl fmt::Display for Redacted<'_, SipUri> {
                 .enumerate()
             {
                 let sep = if i == 0 { '?' } else { '&' };
-                write!(f, "{sep}{name}={value}")?;
+                write!(f, "{sep}{name}")?;
+                if let Some(value) = value {
+                    write!(f, "={value}")?;
+                }
             }
         }
         if let Some(frag) = uri.fragment() {
@@ -217,7 +227,12 @@ impl fmt::Display for Redacted<'_, TelUri> {
         if let Some(number) = uri.number() {
             write_masked_user(f, number, how.user)?;
         }
-        write_params(f, uri.params(), how)?;
+        write_params(
+            f,
+            uri.params()
+                .iter(),
+            how,
+        )?;
         if let Some(frag) = uri.fragment() {
             write!(f, "#{frag}")?;
         }

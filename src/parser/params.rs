@@ -3,7 +3,8 @@ use crate::grammar::{
 };
 use crate::warning::{Component, WarningCode, Warnings};
 
-pub(crate) type Params = Vec<(String, Option<String>)>;
+/// Split pairs, as written, for the data crate's constructor to canonize.
+pub(crate) type RawPairs<'a> = Vec<(&'a str, Option<&'a str>)>;
 
 /// Character sets for one kind of `;`-separated param list.
 pub(crate) struct ParamGrammar {
@@ -35,7 +36,11 @@ pub(crate) const TEL_PARAMS: ParamGrammar = ParamGrammar {
 };
 
 /// Split the params following a `;`, which is not included in `s`.
-pub(crate) fn parse_params(s: &str, grammar: &ParamGrammar, warnings: &mut Warnings) -> Params {
+pub(crate) fn parse_params<'a>(
+    s: &'a str,
+    grammar: &ParamGrammar,
+    warnings: &mut Warnings,
+) -> RawPairs<'a> {
     let component = grammar.component;
     let mut params = Vec::new();
     for part in s.split(';') {
@@ -54,36 +59,39 @@ pub(crate) fn parse_params(s: &str, grammar: &ParamGrammar, warnings: &mut Warni
         if let Some(value) = value {
             warnings.charset(component, value, grammar.value);
         }
-        params.push((name.to_string(), value.map(str::to_string)));
+        params.push((name, value));
     }
     params
 }
 
 /// Split header parameters following a `?`: `name=value` pairs separated by `&`.
-pub(crate) fn parse_headers(s: &str, warnings: &mut Warnings) -> Vec<(String, String)> {
+pub(crate) fn parse_headers<'a>(s: &'a str, warnings: &mut Warnings) -> RawPairs<'a> {
     let mut headers = Vec::new();
     for part in s.split('&') {
         if part.is_empty() {
             warnings.push(Component::Header, WarningCode::EmptySegment, part, 0);
             continue;
         }
-        let (name, value) = part
-            .split_once('=')
-            .unwrap_or_else(|| {
+        let (name, value) = match part.split_once('=') {
+            Some((name, value)) => (name, Some(value)),
+            None => {
                 warnings.push(
                     Component::Header,
                     WarningCode::MissingValue,
                     part,
                     part.len(),
                 );
-                (part, "")
-            });
+                (part, None)
+            }
+        };
         if name.is_empty() {
             warnings.push(Component::Header, WarningCode::EmptyName, part, 0);
         }
         warnings.charset(Component::Header, name, is_hnv_char);
-        warnings.charset(Component::Header, value, is_hnv_char);
-        headers.push((name.to_string(), value.to_string()));
+        if let Some(value) = value {
+            warnings.charset(Component::Header, value, is_hnv_char);
+        }
+        headers.push((name, value));
     }
     headers
 }
@@ -92,7 +100,7 @@ pub(crate) fn parse_headers(s: &str, warnings: &mut Warnings) -> Vec<(String, St
 mod tests {
     use super::*;
 
-    fn sip_params(s: &str) -> Params {
+    fn sip_params(s: &str) -> RawPairs<'_> {
         let mut w = Warnings::new(s);
         let params = parse_params(s, &SIP_PARAMS, &mut w);
         assert!(!w
@@ -103,32 +111,31 @@ mod tests {
 
     #[test]
     fn parse_key_value() {
-        let params = sip_params("transport=tcp");
-        assert_eq!(params, vec![("transport".into(), Some("tcp".into()))]);
+        assert_eq!(sip_params("transport=tcp"), [("transport", Some("tcp"))]);
     }
 
     #[test]
     fn parse_mixed() {
-        let params = sip_params("user=phone;ttl=1;isfocus");
         assert_eq!(
-            params,
-            vec![
-                ("user".into(), Some("phone".into())),
-                ("ttl".into(), Some("1".into())),
-                ("isfocus".into(), None),
+            sip_params("user=phone;ttl=1;isfocus"),
+            [
+                ("user", Some("phone")),
+                ("ttl", Some("1")),
+                ("isfocus", None)
             ]
         );
     }
 
     #[test]
     fn parse_headers_basic() {
-        let s = "From=foo@bar&To=bar@baz";
+        let s = "From=foo@bar&To=bar@baz&Flag";
         let headers = parse_headers(s, &mut Warnings::new(s));
         assert_eq!(
             headers,
-            vec![
-                ("From".into(), "foo@bar".into()),
-                ("To".into(), "bar@baz".into()),
+            [
+                ("From", Some("foo@bar")),
+                ("To", Some("bar@baz")),
+                ("Flag", None)
             ]
         );
     }

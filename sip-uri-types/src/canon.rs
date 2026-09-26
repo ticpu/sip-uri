@@ -199,9 +199,9 @@ pub(crate) fn canonize_param(name: &str, value: Option<&str>) -> (String, Option
 }
 
 /// Canonize a SIP URI header name and value.
-pub(crate) fn canonize_header(name: &str, value: &str) -> (String, String) {
+pub(crate) fn canonize_header(name: &str, value: Option<&str>) -> (String, Option<String>) {
     let one = |s: &str| canonize(s, is_unreserved, is_hnv_literal);
-    (one(name), one(value))
+    (one(name), value.map(one))
 }
 
 /// Canonize a tel: number.
@@ -355,7 +355,12 @@ mod tests {
     #[test]
     fn encode_uri_header_matches_canonical_form() {
         let encoded = encode_uri_header("12345@example.com;to-tag=abc");
-        assert_eq!(canonize_header("", &encoded).1, encoded.as_ref());
+        assert_eq!(
+            canonize_header("", Some(&encoded))
+                .1
+                .as_deref(),
+            Some(encoded.as_ref())
+        );
     }
 
     #[test]
@@ -396,7 +401,7 @@ mod tests {
             |s| canonize_user_param(s, None).0,
             canonize_password,
             |s| canonize_param(s, None).0,
-            |s| canonize_header(s, "").0,
+            |s| canonize_header(s, None).0,
             canonize_tel_number,
             canonize_sip_fragment,
             canonize_fragment,

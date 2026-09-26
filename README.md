@@ -39,6 +39,7 @@ sip-uri = "0.3.0-rc.1"
 | `UrnUri` | URN with NID, NSS, and optional r/q/f components |
 | `OtherUri` | Text with an unrecognized scheme, or none, kept with its scheme lowercased and bytes that would break a header line escaped |
 | `SipUriParts`, `TelUriParts`, `UrnUriParts` | Public-field components; `From` canonizes them into the URI, `into_parts()` gives them back |
+| `Params`, `UserParams`, `Headers` | Ordered `(name, value)` pairs, canonized on insertion; `iter()` and case-insensitive `get()` |
 | `Host` | IPv4, IPv6, or `Hostname` (lowercase by construction) |
 | `Scheme` | `Sip` or `Sips` |
 | `ParseError` | `Empty`, `SchemeMismatch`, or `NonConformant` from a strict parse |
@@ -74,11 +75,11 @@ let uri = SipUri::parse(
 
 assert_eq!(uri.scheme(), Some(Scheme::Sips));
 assert_eq!(uri.user(), Some("+15551234567"));
-assert_eq!(uri.user_params(), &[("cpc".into(), Some("ordinary".into()))]);
+assert_eq!(uri.user_param("cpc"), Some(Some("ordinary")));
 assert_eq!(uri.password(), Some("secret"));
 assert_eq!(uri.port(), Some(5061));
 assert_eq!(uri.param("user"), Some(Some("phone")));
-assert_eq!(uri.header("Subject"), Some("test"));
+assert_eq!(uri.header("Subject"), Some(Some("test")));
 ```
 
 ### User-params
@@ -268,8 +269,11 @@ The `serde` feature (Rust 1.71 or newer; the crates otherwise need 1.70, and rai
 ```json
 {"sip": {"scheme": "sip", "user": "alice", "user_params": [], "password": null,
          "host": {"hostname": "example.com"}, "port": null,
-         "params": [["transport", "tcp"]], "headers": [], "fragment": null}}
+         "params": [["transport", "tcp"]], "headers": [["Subject", "x"], ["Flag", null]],
+         "fragment": null}}
 ```
+
+Params, user-params and headers are sequences of `[name, value]` pairs, the value null when absent.
 
 A field that carries the URI as text uses an adapter from `sip_uri::serde_str`, which writes `Display` and reads with the lenient parser:
 

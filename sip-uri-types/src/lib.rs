@@ -51,6 +51,7 @@ mod urn_uri;
 
 pub use canon::{decode_user, encode_uri_header};
 pub use host::{Bare, Host, Hostname};
+pub use params::{Headers, Pairs, Params, UserParams};
 pub use sip_uri::{Scheme, SipUri, SipUriParts};
 pub use tel_uri::{TelUri, TelUriParts};
 pub use uri::{OtherUri, Uri};
@@ -76,5 +77,9 @@ mod tests {
         is_send_sync_unpin::<Hostname>();
         is_send_sync_unpin::<Bare<'static>>();
         is_send_sync_unpin::<Scheme>();
+        is_send_sync_unpin::<Params>();
+        is_send_sync_unpin::<UserParams>();
+        is_send_sync_unpin::<Headers>();
+        is_send_sync_unpin::<Pairs<'static>>();
     }
 }

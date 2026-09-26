@@ -92,7 +92,9 @@ fn split_userinfo(s: &str, parts: &mut SipUriParts, warnings: &mut Warnings) {
     }
 
     if let Some(p) = params_str {
-        parts.user_params = parse_params(p, &params::USER_PARAMS, warnings);
+        parts.user_params = parse_params(p, &params::USER_PARAMS, warnings)
+            .into_iter()
+            .collect();
     }
     parts.user = Some(user_part.to_string());
 }
@@ -180,10 +182,14 @@ fn split_hostport_params_headers(s: &str, parts: &mut SipUriParts, warnings: &mu
     };
 
     if let Some(p) = params_str {
-        parts.params = parse_params(p, &params::SIP_PARAMS, warnings);
+        parts.params = parse_params(p, &params::SIP_PARAMS, warnings)
+            .into_iter()
+            .collect();
     }
     if let Some(h) = headers_str {
-        parts.headers = parse_headers(h, warnings);
+        parts.headers = parse_headers(h, warnings)
+            .into_iter()
+            .collect();
     }
 }
 
@@ -191,7 +197,7 @@ fn split_hostport_params_headers(s: &str, parts: &mut SipUriParts, warnings: &mu
 mod tests {
     use super::*;
     use crate::UriParse;
-    use sip_uri_types::Host;
+    use sip_uri_types::{Host, Params, UserParams};
     use std::net::Ipv4Addr;
 
     #[test]
@@ -244,9 +250,9 @@ mod tests {
         assert_eq!(uri.password(), Some("pass"));
         assert_eq!(uri.host(), Some(&Host::Hostname("host".into())));
         assert_eq!(uri.port(), Some(32));
-        assert_eq!(uri.params(), &[("param".into(), Some("1".into()))]);
-        assert_eq!(uri.header("From"), Some("foo%40bar"));
-        assert_eq!(uri.header("To"), Some("bar%40baz"));
+        assert_eq!(uri.params(), &Params::new().with("param", Some("1")));
+        assert_eq!(uri.header("From"), Some(Some("foo%40bar")));
+        assert_eq!(uri.header("To"), Some(Some("bar%40baz")));
     }
 
     #[test]
@@ -275,10 +281,13 @@ mod tests {
     fn parse_user_with_slash_semicolon() {
         let uri = SipUri::parse("sip:user/path;tel-param:pass@host:32;param=1%3d%3d1").unwrap();
         assert_eq!(uri.user(), Some("user/path"));
-        assert_eq!(uri.user_params(), &[("tel-param".into(), None)]);
+        assert_eq!(
+            uri.user_params(),
+            &UserParams::new().with("tel-param", None)
+        );
         assert_eq!(uri.password(), Some("pass"));
         // %3d normalized to uppercase %3D
-        assert_eq!(uri.params(), &[("param".into(), Some("1%3D%3D1".into()))]);
+        assert_eq!(uri.params(), &Params::new().with("param", Some("1%3D%3D1")));
     }
 
     #[test]
@@ -287,7 +296,7 @@ mod tests {
         assert_eq!(uri.user(), Some("&=+$,"));
         // `;` splits user from user-params, `?/` is a param name (no `=`),
         // and `:` splits the remaining `&=+$,` as the password
-        assert_eq!(uri.user_params(), &[("?/".into(), None)]);
+        assert_eq!(uri.user_params(), &UserParams::new().with("?/", None));
         assert_eq!(uri.password(), Some("&=+$,"));
         assert_eq!(
             uri.host()
@@ -306,7 +315,10 @@ mod tests {
         // Sofia-sip compatibility: phones put unescaped # in user
         let uri = SipUri::parse("SIP:#**00**#;foo=/bar@127.0.0.1").unwrap();
         assert_eq!(uri.user(), Some("#**00**#"));
-        assert_eq!(uri.user_params(), &[("foo".into(), Some("/bar".into()))]);
+        assert_eq!(
+            uri.user_params(),
+            &UserParams::new().with("foo", Some("/bar"))
+        );
     }
 
     #[test]

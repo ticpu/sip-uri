@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use sip_uri::{
     decode_user, Host, Hostname, OtherUri, SipUri, SipUriParts, TelUri, TelUriParts, Uri, UriParse,
-    UrnUri, UrnUriParts,
+    UrnUri, UrnUriParts, UserParams,
 };
 
 fn host() -> Host {
@@ -16,9 +16,12 @@ fn hostname(uri: &SipUri) -> Option<String> {
     }
 }
 
-fn only<T: Clone>(items: &[T]) -> Option<T> {
-    match items {
-        [one] => Some(one.clone()),
+fn only<'a>(
+    pairs: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,
+) -> Option<(String, Option<String>)> {
+    let mut pairs = pairs.into_iter();
+    match (pairs.next(), pairs.next()) {
+        (Some((name, value)), None) => Some((name.to_string(), value.map(str::to_string))),
         _ => None,
     }
 }
@@ -170,7 +173,7 @@ fn conformant_sip_bytes_are_never_escaped() {
         |t| {
             only(
                 base()
-                    .with_header(t, "v")
+                    .with_header(t, Some("v".into()))
                     .headers(),
             )
             .map(|(n, _)| n)
@@ -180,14 +183,14 @@ fn conformant_sip_bytes_are_never_escaped() {
     sweep::<SipUri>(
         "header value",
         |t| format!("sip:example.com?n={t}"),
-        |u| only(u.headers()).map(|(_, v)| v),
+        |u| only(u.headers()).and_then(|(_, v)| v),
         |t| {
             only(
                 base()
-                    .with_header("n", t)
+                    .with_header("n", Some(t.into()))
                     .headers(),
             )
-            .map(|(_, v)| v)
+            .and_then(|(_, v)| v)
         },
         same,
     );
@@ -411,7 +414,11 @@ fn sip_values(s: &str) -> Vec<SipUri> {
             .with_user_param("", Some(s.into()))
             .with_password(s),
         base()
-            .with_user_params(vec![("".into(), Some(s.into())), (s.into(), None)])
+            .with_user_params(
+                UserParams::new()
+                    .with("", Some(s))
+                    .with(s, None),
+            )
             .with_param("", Some(s.into())),
         base().with_password(s),
         base()
@@ -421,12 +428,16 @@ fn sip_values(s: &str) -> Vec<SipUri> {
         base().with_param(s, Some(s.into())),
         base().with_param(s, Some("v".into())),
         base().with_param("n", Some(s.into())),
-        base().with_header(s, s),
-        base().with_header("n", s),
+        base().with_header(s, Some(s.into())),
+        base().with_header("n", Some(s.into())),
+        base().with_header(s, None),
+        base()
+            .with_header("h", None)
+            .with_header(s, None),
         base().with_fragment(s),
         base()
             .with_param("n", None)
-            .with_header("h", "v")
+            .with_header("h", Some("v".into()))
             .with_fragment(s),
         SipUri::new(Host::Hostname(Hostname::from(s))),
         SipUri::new(Host::Hostname(Hostname::from(s)))

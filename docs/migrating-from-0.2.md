@@ -187,6 +187,19 @@ assert_eq!(uri.param("maddr"), None);                   // absent
 
 The new `user_param()` looks up the params inside the userinfo in the same way.
 
+The collections are opaque types instead of slices of tuples, so their storage can change within 1.x:
+
+| 0.2 | 0.3 |
+|---|---|
+| `params() -> &[(String, Option<String>)]` | `&Params`; `iter()` yields `(&str, Option<&str>)`, `get()` looks up case-insensitively |
+| `user_params() -> &[(String, Option<String>)]` | `&UserParams`, the same API |
+| `headers() -> &[(String, String)]` | `&Headers`, the same API; a value is `Option<&str>` |
+| `header(name) -> Option<&str>` | `Option<Option<&str>>`, like `param()` |
+| `with_header(name, value)` | `with_header(name, Some(value))` |
+| `with_user_params(Vec<…>)` | takes a `UserParams`, or the same `Vec` through `From` |
+
+`push`, `From` and `collect()` canonize each pair by its component's grammar, which is why user-params have a type of their own: `=` is literal in a user-param value and escaped in a URI param. A header written without `=`, as in `sip:example.com?Flag`, holds no value and prints as it came; 0.2 read it as empty and printed `?Flag=`.
+
 ## Logging
 
 `Display` writes the user part and password. For logs, use the redacted rendering, which masks the whole userinfo (or a tel: number) by default:

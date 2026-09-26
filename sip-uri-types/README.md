@@ -31,6 +31,7 @@ assert_eq!(tel.number(), Some("+1555%3Bx=1"));
 | `Uri` | `Sip`, `Tel`, `Urn` or `Other` |
 | `SipUri`, `TelUri`, `UrnUri` | URI values with builders and accessors |
 | `SipUriParts`, `TelUriParts`, `UrnUriParts` | Public-field components; `From` canonizes them into the URI, `into_parts()` gives them back |
+| `Params`, `UserParams`, `Headers` | Ordered `(name, value)` pairs, canonized on insertion; `iter()` and case-insensitive `get()` |
 | `OtherUri` | Text with an unrecognized scheme, or none, scheme lowercased; `OtherUri::new(scheme, rest)` |
 | `Host`, `Hostname`, `Bare` | IPv4, IPv6 or a canonical hostname; `bare()` renders IPv6 without brackets |
 | `Scheme` | `Sip` or `Sips` |
@@ -50,7 +51,7 @@ Hostnames are lowercased as ASCII only, with no IDNA and no non-ASCII case foldi
 
 ## Serde
 
-The optional `serde` feature serializes a value as its parts and deserializes through the same canonizing constructor, so a deserialized value equals the one `From` its parts would build. `Uri` and `Host` are tagged by kind (`{"sip": {…}}`, `{"hostname": "example.com"}`), `Scheme` is `"sip"` or `"sips"`, missing fields take their defaults and unknown ones are ignored; a SIP URI read without `scheme` has none. To read and write a URI as text, use the adapters in sip-uri's `serde_str` module.
+The optional `serde` feature serializes a value as its parts and deserializes through the same canonizing constructor, so a deserialized value equals the one `From` its parts would build. `Uri` and `Host` are tagged by kind (`{"sip": {…}}`, `{"hostname": "example.com"}`), `Scheme` is `"sip"` or `"sips"`, params and headers are sequences of `[name, value]` pairs with `null` for no value, missing fields take their defaults and unknown ones are ignored; a SIP URI read without `scheme` has none. To read and write a URI as text, use the adapters in sip-uri's `serde_str` module.
 
 ## Stability
 

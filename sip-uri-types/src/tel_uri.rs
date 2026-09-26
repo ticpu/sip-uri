@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::canon;
-use crate::params;
+use crate::params::{self, Params};
 
 /// tel: URI per RFC 3966.
 ///
@@ -18,7 +18,7 @@ use crate::params;
 #[non_exhaustive]
 pub struct TelUri {
     number: Option<String>,
-    params: Vec<(String, Option<String>)>,
+    params: Params,
     fragment: Option<String>,
 }
 
@@ -34,7 +34,7 @@ pub struct TelUriParts {
     /// The telephone number, `+` first for a global one.
     pub number: Option<String>,
     /// Parameters after the number.
-    pub params: Vec<(String, Option<String>)>,
+    pub params: Params,
     /// The fragment after `#`.
     pub fragment: Option<String>,
 }
@@ -47,7 +47,7 @@ impl From<TelUriParts> for TelUri {
                 .as_deref()
                 .filter(|n| !n.is_empty())
                 .map(canon::canonize_tel_number),
-            params: params::canonize_pairs(p.params, canon::canonize_param),
+            params: p.params,
             fragment: p
                 .fragment
                 .as_deref()
@@ -85,12 +85,8 @@ impl TelUri {
 
     /// Add a parameter, escaping any delimiter in the name or value.
     pub fn with_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
-        params::push_pair(
-            &mut self.params,
-            &name.into(),
-            value.as_deref(),
-            canon::canonize_param,
-        );
+        self.params
+            .push(&name.into(), value.as_deref());
         self
     }
 
@@ -109,13 +105,15 @@ impl TelUri {
     }
 
     /// Parameters.
-    pub fn params(&self) -> &[(String, Option<String>)] {
+    pub fn params(&self) -> &Params {
         &self.params
     }
 
-    /// Look up a parameter by name (case-insensitive).
+    /// Look up a parameter by name (case-insensitive): `Some(None)` when it
+    /// has no value.
     pub fn param(&self, name: &str) -> Option<Option<&str>> {
-        params::find_param(&self.params, name)
+        self.params
+            .get(name)
     }
 
     /// The fragment component (after `#`), if present.
@@ -138,7 +136,11 @@ impl fmt::Display for TelUri {
         if let Some(ref number) = self.number {
             write!(f, "{number}")?;
         }
-        params::format_params(&self.params, f)?;
+        params::format_params(
+            self.params
+                .iter(),
+            f,
+        )?;
         if let Some(ref frag) = self.fragment {
             write!(f, "#{frag}")?;
         }
@@ -160,7 +162,7 @@ mod tests {
     fn parts_canonize_like_builders() {
         let uri = TelUri::from(TelUriParts {
             number: Some("+1555 123".into()),
-            params: vec![("a;b".into(), None)],
+            params: Params::new().with("a;b", None),
             ..Default::default()
         });
         assert_eq!(uri, TelUri::new("+1555 123").with_param("a;b", None));

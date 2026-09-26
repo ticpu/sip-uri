@@ -150,7 +150,7 @@ fn empty_port() {
 #[test]
 fn empty_param_name() {
     let (uri, w) = sip("sip:example.com;=v");
-    assert_eq!(uri.params(), &[("".into(), Some("v".into()))]);
+    assert_eq!(uri.param(""), Some(Some("v")));
     only(&w, Component::Param, WarningCode::EmptyName);
 }
 
@@ -190,7 +190,7 @@ fn param_extension_chars() {
 #[test]
 fn invalid_header_char() {
     let (uri, w) = sip("sip:alice@example.com?Subject=a b");
-    assert_eq!(uri.header("Subject"), Some("a%20b"));
+    assert_eq!(uri.header("Subject"), Some(Some("a%20b")));
     only(&w, Component::Header, WarningCode::InvalidChar);
 }
 

@@ -62,7 +62,9 @@ pub(crate) fn parse(input: &str) -> Result<Parsed<TelUri>, ParseError> {
     };
 
     if let Some(p) = params_str {
-        parts.params = parse_params(p, &params::TEL_PARAMS, &mut warnings);
+        parts.params = parse_params(p, &params::TEL_PARAMS, &mut warnings)
+            .into_iter()
+            .collect();
     }
 
     if number_str.is_empty() {

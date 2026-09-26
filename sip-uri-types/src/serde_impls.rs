@@ -4,7 +4,26 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::host::{Host, Hostname};
+use crate::params::{Headers, Params, UserParams};
 use crate::uri::OtherUri;
+
+macro_rules! pair_list_serde {
+    ($($ty:ty),*) => {$(
+        impl Serialize for $ty {
+            fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                serializer.collect_seq(self.iter())
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $ty {
+            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                Vec::<(String, Option<String>)>::deserialize(deserializer).map(<$ty>::from)
+            }
+        }
+    )*};
+}
+
+pair_list_serde!(Params, UserParams, Headers);
 
 /// The serialized shape of [`Host`], read before [`Host::from_hostname`].
 #[derive(Deserialize)]
@@ -85,7 +104,9 @@ mod tests {
     fn sip_uri_serializes_as_parts() {
         let uri = SipUri::new(Host::Hostname("example.com".into()))
             .with_user("+15551234567")
-            .with_param("user", Some("phone".into()));
+            .with_param("user", Some("phone".into()))
+            .with_header("Subject", Some("x".into()))
+            .with_header("Flag", None);
         assert_eq!(
             serde_json::to_value(&uri).unwrap(),
             json!({
@@ -96,7 +117,7 @@ mod tests {
                 "host": {"hostname": "example.com"},
                 "port": null,
                 "params": [["user", "phone"]],
-                "headers": [],
+                "headers": [["Subject", "x"], ["Flag", null]],
                 "fragment": null,
             })
         );
@@ -108,9 +129,10 @@ mod tests {
             "user": "a b;c",
             "host": {"hostname": "EXAMPLE%2ecom"},
             "params": [["x", "a@b"], ["", null]],
+            "headers": [["h", null], ["n", "a b"]],
         }))
         .unwrap();
-        assert_eq!(uri.to_string(), "a%20b%3Bc@example.com;x=a%40b");
+        assert_eq!(uri.to_string(), "a%20b%3Bc@example.com;x=a%40b?h&n=a%20b");
 
         let tel: TelUri = serde_json::from_value(json!({"number": "+1555;x=1"})).unwrap();
         assert_eq!(tel, TelUri::new("+1555;x=1"));
@@ -142,7 +164,8 @@ mod tests {
             .with_password("pw")
             .with_port(5061)
             .with_param("lr", None)
-            .with_header("Subject", "a b")
+            .with_header("Subject", Some("a b".into()))
+            .with_header("Flag", None)
             .with_fragment("f")
             .into(),
         );

@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::canon;
 use crate::host::Host;
-use crate::params::{self, Params};
+use crate::params::{self, Headers, Params, UserParams};
 
 /// SIP or SIPS URI per RFC 3261 §19.
 ///
@@ -19,12 +19,12 @@ use crate::params::{self, Params};
 pub struct SipUri {
     scheme: Option<Scheme>,
     user: Option<String>,
-    user_params: Vec<(String, Option<String>)>,
+    user_params: UserParams,
     password: Option<String>,
     host: Option<Host>,
     port: Option<u16>,
-    params: Vec<(String, Option<String>)>,
-    headers: Vec<(String, String)>,
+    params: Params,
+    headers: Headers,
     fragment: Option<String>,
 }
 
@@ -42,7 +42,7 @@ pub struct SipUriParts {
     /// The user part, without user-params or password.
     pub user: Option<String>,
     /// Parameters within the userinfo, before `@`.
-    pub user_params: Vec<(String, Option<String>)>,
+    pub user_params: UserParams,
     /// The password.
     pub password: Option<String>,
     /// The host.
@@ -50,25 +50,24 @@ pub struct SipUriParts {
     /// The port.
     pub port: Option<u16>,
     /// URI parameters after the host.
-    pub params: Vec<(String, Option<String>)>,
+    pub params: Params,
     /// URI headers after `?`.
-    pub headers: Vec<(String, String)>,
+    pub headers: Headers,
     /// The fragment after `#`.
     pub fragment: Option<String>,
 }
 
 impl From<SipUriParts> for SipUri {
     fn from(p: SipUriParts) -> Self {
-        let user_params = params::canonize_pairs(p.user_params, canon::canonize_user_param);
         SipUri {
             scheme: p.scheme,
             user: hold_user(
                 p.user
                     .as_deref()
                     .map(canon::canonize_user),
-                &user_params,
+                &p.user_params,
             ),
-            user_params,
+            user_params: p.user_params,
             password: p
                 .password
                 .as_deref()
@@ -78,12 +77,8 @@ impl From<SipUriParts> for SipUri {
                 .map(Host::normalized)
                 .filter(|h| !matches!(h, Host::Hostname(name) if name.is_empty())),
             port: p.port,
-            params: params::canonize_pairs(p.params, canon::canonize_param),
-            headers: p
-                .headers
-                .iter()
-                .map(|(name, value)| canon::canonize_header(name, value))
-                .collect(),
+            params: p.params,
+            headers: p.headers,
             fragment: p
                 .fragment
                 .as_deref()
@@ -101,7 +96,7 @@ impl From<SipUri> for SipUriParts {
 
 /// An empty user prints as a bare `@`, which parses as no userinfo, unless
 /// user-params follow it; user-params print only after a user.
-fn hold_user(user: Option<String>, user_params: &Params) -> Option<String> {
+fn hold_user(user: Option<String>, user_params: &UserParams) -> Option<String> {
     match user {
         Some(u) if u.is_empty() && user_params.is_empty() => None,
         None if !user_params.is_empty() => Some(String::new()),
@@ -179,10 +174,9 @@ impl SipUri {
         self
     }
 
-    /// Replace all user-params (parameters within the userinfo, before `@`),
-    /// canonized as [`SipUri::with_user_param`] does.
-    pub fn with_user_params(mut self, params: Vec<(String, Option<String>)>) -> Self {
-        self.user_params = params::canonize_pairs(params, canon::canonize_user_param);
+    /// Replace all user-params (parameters within the userinfo, before `@`).
+    pub fn with_user_params(mut self, params: impl Into<UserParams>) -> Self {
+        self.user_params = params.into();
         self.user = hold_user(self.user, &self.user_params);
         self
     }
@@ -190,12 +184,8 @@ impl SipUri {
     /// Add a single user-param (parameter within the userinfo, before `@`),
     /// escaping any delimiter in the name or value.
     pub fn with_user_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
-        params::push_pair(
-            &mut self.user_params,
-            &name.into(),
-            value.as_deref(),
-            canon::canonize_user_param,
-        );
+        self.user_params
+            .push(&name.into(), value.as_deref());
         self.user = hold_user(self.user, &self.user_params);
         self
     }
@@ -214,19 +204,16 @@ impl SipUri {
 
     /// Add a URI parameter, escaping any delimiter in the name or value.
     pub fn with_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
-        params::push_pair(
-            &mut self.params,
-            &name.into(),
-            value.as_deref(),
-            canon::canonize_param,
-        );
+        self.params
+            .push(&name.into(), value.as_deref());
         self
     }
 
-    /// Add a header, escaping any delimiter in the name or value.
-    pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+    /// Add a header, escaping any delimiter in the name or value. `None`
+    /// writes the name alone, without `=`.
+    pub fn with_header(mut self, name: impl Into<String>, value: Option<String>) -> Self {
         self.headers
-            .push(canon::canonize_header(&name.into(), &value.into()));
+            .push(&name.into(), value.as_deref());
         self
     }
 
@@ -251,7 +238,7 @@ impl SipUri {
     /// Parameters within the userinfo (before `@`), separated by `;` in the user part.
     ///
     /// Common in tel-style SIP URIs, e.g., `sip:+15551234567;cpc=emergency@host`.
-    pub fn user_params(&self) -> &[(String, Option<String>)] {
+    pub fn user_params(&self) -> &UserParams {
         &self.user_params
     }
 
@@ -273,31 +260,34 @@ impl SipUri {
     }
 
     /// URI parameters (after host, separated by `;`).
-    pub fn params(&self) -> &[(String, Option<String>)] {
+    pub fn params(&self) -> &Params {
         &self.params
     }
 
-    /// Look up a URI parameter by name (case-insensitive).
+    /// Look up a URI parameter by name (case-insensitive): `Some(None)` when
+    /// it has no value.
     pub fn param(&self, name: &str) -> Option<Option<&str>> {
-        params::find_param(&self.params, name)
+        self.params
+            .get(name)
     }
 
-    /// Look up a user-param by name (case-insensitive).
+    /// Look up a user-param by name (case-insensitive): `Some(None)` when it
+    /// has no value.
     pub fn user_param(&self, name: &str) -> Option<Option<&str>> {
-        params::find_param(&self.user_params, name)
+        self.user_params
+            .get(name)
     }
 
     /// URI headers (after `?`).
-    pub fn headers(&self) -> &[(String, String)] {
+    pub fn headers(&self) -> &Headers {
         &self.headers
     }
 
-    /// Look up a header by name (case-insensitive).
-    pub fn header(&self, name: &str) -> Option<&str> {
+    /// Look up a header by name (case-insensitive): `Some(None)` when it was
+    /// written without `=`, `Some(Some(""))` when written `name=`.
+    pub fn header(&self, name: &str) -> Option<Option<&str>> {
         self.headers
-            .iter()
-            .find(|(n, _)| n.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.as_str())
+            .get(name)
     }
 
     /// The fragment component (after `#`), if present.
@@ -335,7 +325,11 @@ impl fmt::Display for SipUri {
 
         if let Some(ref user) = self.user {
             write!(f, "{user}")?;
-            params::format_params(&self.user_params, f)?;
+            params::format_params(
+                self.user_params
+                    .iter(),
+                f,
+            )?;
             if let Some(ref pwd) = self.password {
                 write!(f, ":{pwd}")?;
             }
@@ -350,7 +344,11 @@ impl fmt::Display for SipUri {
         if let Some(port) = self.port {
             write!(f, ":{port}")?;
         }
-        params::format_params(&self.params, f)?;
+        params::format_params(
+            self.params
+                .iter(),
+            f,
+        )?;
         params::format_headers(&self.headers, f)?;
         if let Some(ref frag) = self.fragment {
             write!(f, "#{frag}")?;
@@ -378,7 +376,7 @@ mod tests {
             scheme: Some(Scheme::Sip),
             user: Some("a b;c".into()),
             host: Some(Host::Hostname("example.com".into())),
-            params: vec![("x".into(), Some("a@b".into()))],
+            params: Params::new().with("x", Some("a@b")),
             ..Default::default()
         });
         let built = SipUri::new(Host::Hostname("example.com".into()))
@@ -429,15 +427,25 @@ mod tests {
         assert_eq!(uri.to_string(), "sip:;cpc=x@example.com");
         let from_parts = SipUri::from(SipUriParts {
             scheme: Some(Scheme::Sip),
-            user_params: vec![("cpc".into(), Some("x".into()))],
+            user_params: UserParams::new().with("cpc", Some("x")),
             host: Some(host()),
             ..Default::default()
         });
         assert_eq!(from_parts, uri);
         assert_eq!(
-            uri.with_user_params(Vec::new())
+            uri.with_user_params(UserParams::new())
                 .user(),
             None
         );
+    }
+
+    #[test]
+    fn header_without_value_prints_its_name_alone() {
+        let uri = SipUri::new(Host::Hostname("example.com".into()))
+            .with_header("h", None)
+            .with_header("e", Some(String::new()));
+        assert_eq!(uri.header("h"), Some(None));
+        assert_eq!(uri.header("e"), Some(Some("")));
+        assert_eq!(uri.to_string(), "sip:example.com?h&e=");
     }
 }

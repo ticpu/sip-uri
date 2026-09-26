@@ -197,8 +197,7 @@ fn get(uri: &Uri, field: &str) -> Result<Option<String>, String> {
                 .and_then(|u| param_value(u.user_param(name)))),
             "header" => Ok(uri
                 .as_sip()
-                .and_then(|u| u.header(name))
-                .map(str::to_string)),
+                .and_then(|u| param_value(u.header(name)))),
             _ => Err(format!("unknown field {field:?}")),
         };
     }
@@ -269,20 +268,25 @@ fn vars(uri: &Uri) -> Vec<(String, String)> {
                 push(
                     format!("uparam_{}", name.to_lowercase()),
                     value
-                        .clone()
-                        .unwrap_or_default(),
+                        .unwrap_or_default()
+                        .into(),
                 );
             }
             for (name, value) in u.params() {
                 push(
                     format!("param_{}", name.to_lowercase()),
                     value
-                        .clone()
-                        .unwrap_or_default(),
+                        .unwrap_or_default()
+                        .into(),
                 );
             }
             for (name, value) in u.headers() {
-                push(format!("header_{}", name.to_lowercase()), value.clone());
+                push(
+                    format!("header_{}", name.to_lowercase()),
+                    value
+                        .unwrap_or_default()
+                        .into(),
+                );
             }
         }
         Uri::Tel(u) => {
@@ -290,8 +294,8 @@ fn vars(uri: &Uri) -> Vec<(String, String)> {
                 push(
                     format!("param_{}", name.to_lowercase()),
                     value
-                        .clone()
-                        .unwrap_or_default(),
+                        .unwrap_or_default()
+                        .into(),
                 );
             }
         }
