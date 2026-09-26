@@ -28,11 +28,20 @@ keywords = ["sip", "uri", "voip", "tel", "urn"]
 categories = ["parser-implementations", "network-programming"]
 exclude = ["CLAUDE.md", "hooks/", ".claude/", "scripts/"]
 
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+serde = ["dep:serde", "sip-uri-types/serde"]
+
 [dependencies]
+serde = { version = "1", optional = true }
 sip-uri-types = { version = "1.0.0-rc.1", path = "sip-uri-types" }
 
 [dev-dependencies]
 clap = { version = "4", default-features = false, features = ["std", "help", "usage", "error-context", "derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [profile.release-min]
 inherits = "release"

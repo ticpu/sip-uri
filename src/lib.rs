@@ -39,6 +39,8 @@ mod error;
 mod grammar;
 mod parser;
 mod redact;
+#[cfg(feature = "serde")]
+pub mod serde_str;
 mod warning;
 
 pub use error::ParseError;
