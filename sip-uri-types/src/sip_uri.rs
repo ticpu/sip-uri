@@ -9,7 +9,9 @@ use crate::params::{self, Headers, Params, UserParams};
 /// Supports the full grammar including user-params (`;` within userinfo),
 /// password, IPv6 hosts, URI parameters, and headers. A scheme or host that
 /// is missing or unreadable is `None`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+///
+/// [`fmt::Debug`] writes a password as `***`.
+#[derive(Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -29,7 +31,9 @@ pub struct SipUri {
 }
 
 /// The components of a [`SipUri`], each canonized on conversion.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+///
+/// [`fmt::Debug`] writes a password as `***`.
+#[derive(Clone, PartialEq, Eq, Default)]
 #[cfg_attr(
     feature = "serde",
     derive(serde::Serialize, serde::Deserialize),
@@ -91,6 +95,49 @@ impl From<SipUriParts> for SipUri {
 impl From<SipUri> for SipUriParts {
     fn from(uri: SipUri) -> Self {
         uri.into_parts()
+    }
+}
+
+struct Masked;
+
+impl fmt::Debug for Masked {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("***")
+    }
+}
+
+/// The derived `Debug` field list of `$value`, its password masked.
+macro_rules! debug_masking_password {
+    ($f:expr, $name:literal, $value:expr) => {
+        $f.debug_struct($name)
+            .field("scheme", &$value.scheme)
+            .field("user", &$value.user)
+            .field("user_params", &$value.user_params)
+            .field(
+                "password",
+                &$value
+                    .password
+                    .as_ref()
+                    .map(|_| Masked),
+            )
+            .field("host", &$value.host)
+            .field("port", &$value.port)
+            .field("params", &$value.params)
+            .field("headers", &$value.headers)
+            .field("fragment", &$value.fragment)
+            .finish()
+    };
+}
+
+impl fmt::Debug for SipUri {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        debug_masking_password!(f, "SipUri", self)
+    }
+}
+
+impl fmt::Debug for SipUriParts {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        debug_masking_password!(f, "SipUriParts", self)
     }
 }
 
@@ -459,6 +506,28 @@ mod tests {
                 .user(),
             None
         );
+    }
+
+    #[test]
+    fn debug_masks_the_password() {
+        let uri = SipUri::new(Host::Hostname("example.com".into()))
+            .with_user("alice")
+            .with_password("secret");
+        for debug in [
+            format!("{uri:?}"),
+            format!("{:?}", crate::Uri::Sip(uri.clone())),
+            format!(
+                "{:?}",
+                uri.clone()
+                    .into_parts()
+            ),
+        ] {
+            assert!(!debug.contains("secret"), "{debug}");
+            assert!(debug.contains("password: Some(***)"), "{debug}");
+            assert!(debug.contains("user: Some(\"alice\")"), "{debug}");
+        }
+        let without = SipUri::new(Host::Hostname("example.com".into()));
+        assert!(format!("{without:?}").contains("password: None"));
     }
 
     #[test]

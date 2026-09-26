@@ -251,7 +251,8 @@ input.
 
 `Display` writes the user part and password. For logs, `UriRedact::redacted()` renders
 through a `Redaction`: by default the whole userinfo, or a tel: number, becomes
-`***`, and the caller relaxes that per deployment policy.
+`***`, and the caller relaxes that per deployment policy. `Debug` writes a
+password as `***` but the user part as it is.
 
 ```rust
 use sip_uri::{Redaction, SipUri, UriParse, UriRedact, UserMask};

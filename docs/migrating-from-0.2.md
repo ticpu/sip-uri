@@ -216,6 +216,8 @@ assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
 
 `redacted()` comes from the `UriRedact` trait, so import it.
 
+`Debug` of `SipUri`, `SipUriParts` and `Uri` writes a password as `***`; 0.2's derived `Debug` printed it. The user part still prints as it is.
+
 ## Serde
 
 A new `serde` feature serializes a value as its parts and deserializes it through the same canonizing constructor. To read and write a URI as text instead, use the adapters in `sip_uri::serde_str` with `#[serde(with = …)]`. The [README](../README.md#serde) shows both forms.
