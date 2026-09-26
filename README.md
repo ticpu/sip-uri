@@ -299,24 +299,24 @@ Adapters exist for `uri`, `sip_uri`, `tel_uri`, `urn_uri` and `host`, each with 
 
 ## Design
 
-- **No third-party dependencies** -- sip-uri depends only on sip-uri-types, which depends on nothing but an optional `serde`. Not even `percent-encoding`: the subset needed is trivial and avoids transitive dep churn.
-- **Hand-written parser** -- the SIP URI grammar is regular enough that nom/regex
+- **No third-party dependencies** — sip-uri depends only on sip-uri-types, which depends on nothing but an optional `serde`. Not even `percent-encoding`: the subset needed is trivial and avoids transitive dep churn.
+- **Hand-written parser** — the SIP URI grammar is regular enough that nom/regex
   are unnecessary overhead. Parsing follows the sofia-sip two-phase `@` discovery
   algorithm for correct handling of reserved characters in user-parts.
-- **Case-insensitive where required** -- scheme and parameter name lookup are
+- **Case-insensitive where required** — scheme and parameter name lookup are
   case-insensitive per RFC. Host names are lowercased.
-- **`#[non_exhaustive]`** -- on every public enum and public-field struct.
-- **Fragment support** -- `SipUri` and `TelUri` parse and round-trip `#fragment`
+- **`#[non_exhaustive]`** — on every public enum and public-field struct.
+- **Fragment support** — `SipUri` and `TelUri` parse and round-trip `#fragment`
   components (accepted permissively, matching sofia-sip behavior).
-- **Any-scheme fallback** -- `Uri::Other` keeps URIs with unrecognized schemes
+- **Any-scheme fallback** — `Uri::Other` keeps URIs with unrecognized schemes
   (http, https, data, etc.) as sent, decoding nothing, so header values like
   `Call-Info` that carry non-SIP URIs still parse.
 
 ## RFC coverage
 
-- **RFC 3261 19/25** -- SIP-URI, SIPS-URI syntax, percent-encoding
-- **RFC 3966** -- tel-URI (global/local numbers, visual separators, parameters)
-- **RFC 8141** -- URN syntax (NID, NSS, r/q/f components)
+- **RFC 3261 19/25** — SIP-URI, SIPS-URI syntax, percent-encoding
+- **RFC 3966** — tel-URI (global/local numbers, visual separators, parameters)
+- **RFC 8141** — URN syntax (NID, NSS, r/q/f components)
 
 ## Examples
 
@@ -338,13 +338,13 @@ coverage, tests and gitleaks on every commit.
 
 ## Other Rust SIP URI crates
 
-- [rsip](https://crates.io/crates/rsip) -- full SIP library with heavy deps
+- [rsip](https://crates.io/crates/rsip) — full SIP library with heavy deps
   (nom, bytes, md5, sha2, uuid). No tel: URI support, no user-param extraction.
-- [rvoip-sip-core](https://crates.io/crates/rvoip-sip-core) -- alpha with a
+- [rvoip-sip-core](https://crates.io/crates/rvoip-sip-core) — alpha with a
   massive dependency tree.
 
 Neither is a focused URI-only parser without third-party dependencies.
 
 ## License
 
-MIT OR Apache-2.0 -- see [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
+MIT OR Apache-2.0 — see [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
