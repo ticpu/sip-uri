@@ -4,7 +4,63 @@ SIP/SIPS (RFC 3261), tel: (RFC 3966) and URN (RFC 8141) URI value types for Rust
 
 Each component is held in one canonical form, whether the value was built or parsed, so equality, hashing and `Display` do not depend on how the URI was spelled. Crates that expose a URI in their public API name these types, which change only when a value's identity does.
 
-Parsing, warnings and log redaction live in [sip-uri](https://crates.io/crates/sip-uri), which parses into these types and re-exports them.
+Parsing, warnings and log redaction live in [sip-uri](https://crates.io/crates/sip-uri), which parses into these types and re-exports them. This crate has no parser of its own and no `FromStr`.
+
+```toml
+[dependencies]
+sip-uri-types = "1.0.0-rc.1"
+```
+
+```rust
+use sip_uri_types::{Host, SipUri, TelUri};
+
+let uri = SipUri::new(Host::Hostname("example.com".into()))
+    .with_user("+15551234567")
+    .with_param("user", Some("phone".into()));
+assert_eq!(uri.to_string(), "sip:+15551234567@example.com;user=phone");
+
+// Builder input is canonized: a delimiter cannot add a param.
+let tel = TelUri::new("+1555;x=1");
+assert_eq!(tel.number(), Some("+1555%3Bx=1"));
+```
+
+## Types
+
+| Type | Description |
+|---|---|
+| `Uri` | `Sip`, `Tel`, `Urn` or `Other` |
+| `SipUri`, `TelUri`, `UrnUri` | URI values with builders and accessors |
+| `SipUriParts`, `TelUriParts`, `UrnUriParts` | Public-field components; `From` canonizes them into the URI, `into_parts()` gives them back |
+| `OtherUri` | Text with an unrecognized scheme, or none, scheme lowercased; `OtherUri::new(scheme, rest)` |
+| `Host`, `Hostname`, `Bare` | IPv4, IPv6 or a canonical hostname; `bare()` renders IPv6 without brackets |
+| `Scheme` | `Sip` or `Sips` |
+| `encode_uri_header`, `decode_user` | Escape a URI header value; fully decode a user part |
+
+## Canonical form
+
+Each component keeps its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase `%XX`. An escaped reserved character stays escaped, so `%2B1` and `+1` are distinct users.
+
+Builders and parts structs take URI text, not logical values: `with_user("%2B1")` holds `%2B1`, and `decode_user` gives the logical bytes.
+
+Hostnames are lowercased as ASCII only, with no IDNA and no non-ASCII case folding, and a hostname that reads as an IPv4 address is held as `Host::IPv4`. IPv6 renders as the standard library displays it, and an IPv6 zone ID is not representable.
+
+## Equality
+
+`Eq` and `Hash` compare the canonical form component by component: identity, never RFC equivalence. Param order, param and header name case, a tel: number's visual separators, a hostname's trailing dot and a URN's r-, q- and f-components all count.
+
+## Serde
+
+The optional `serde` feature serializes a value as its parts and deserializes through the same canonizing constructor, so a deserialized value equals the one `From` its parts would build. `Uri` and `Host` are tagged by kind (`{"sip": {…}}`, `{"hostname": "example.com"}`), `Scheme` is `"sip"` or `"sips"`, missing fields take their defaults and unknown ones are ignored; a SIP URI read without `scheme` has none. To read and write a URI as text, use the adapters in sip-uri's `serde_str` module.
+
+## Stability
+
+The serde shape is under the same semver as the fields; a field added to a parts struct is a minor release. The URI kinds with their own type are fixed for 1.x: a URI with any other scheme is `Uri::Other`.
+
+## Dependencies
+
+None, beyond the optional `serde`.
+
+Rust 1.70 or newer; the `serde` feature needs 1.71, which serde_derive's dependencies require. Raising either is a minor release.
 
 ## License
 

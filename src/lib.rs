@@ -1,8 +1,9 @@
-//! Zero-dependency SIP/SIPS, tel:, and URN parser.
+//! SIP/SIPS, tel:, and URN parser.
 //!
 //! Implements RFC 3261 §19/§25 (SIP-URI, SIPS-URI), RFC 3966 (tel-URI),
 //! and RFC 8141 (URN) with hand-written parsing and per-component
-//! percent-encoding.
+//! percent-encoding. The value types come from [`sip_uri_types`] and are
+//! re-exported here.
 //!
 //! # Examples
 //!

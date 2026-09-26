@@ -1,10 +1,12 @@
 # sip-uri
 
-Zero-dependency SIP/SIPS, tel:, and URN parser for Rust.
+SIP/SIPS, tel:, and URN parser for Rust.
 
 Implements RFC 3261 (SIP-URI, SIPS-URI), RFC 3966 (tel-URI), and
 RFC 8141 (URN) with hand-written parsing and per-component
 percent-encoding.
+
+The value types live in [sip-uri-types](https://crates.io/crates/sip-uri-types), which this crate parses into and re-exports. A crate exposing a URI in its public API names `sip_uri_types`, which aims at a stable 1.x, so it does not break when parse policy here moves on a minor release.
 
 ```rust
 use sip_uri::{SipUri, TelUri, UriParse, UrnUri};
@@ -25,7 +27,7 @@ assert_eq!(urn.nss(), Some("sos"));
 
 ```toml
 [dependencies]
-sip-uri = "0.3"
+sip-uri = "0.3.0-rc.1"
 ```
 
 ## Types
@@ -35,22 +37,29 @@ sip-uri = "0.3"
 | `SipUri` | SIP or SIPS URI with user, host, port, params, headers, fragment |
 | `TelUri` | tel: URI with number, params, fragment |
 | `UrnUri` | URN with NID, NSS, and optional r/q/f components |
-| `OtherUri` | Text with an unrecognized scheme, or none, kept with its scheme lowercased |
+| `OtherUri` | Text with an unrecognized scheme, or none, kept with its scheme lowercased and bytes that would break a header line escaped |
 | `SipUriParts`, `TelUriParts`, `UrnUriParts` | Public-field components; `From` canonizes them into the URI, `into_parts()` gives them back |
 | `Host` | IPv4, IPv6, or `Hostname` (lowercase by construction) |
 | `Scheme` | `Sip` or `Sips` |
 | `ParseError` | `Empty`, `SchemeMismatch`, or `NonConformant` from a strict parse |
 | `Parsed` / `ParseWarning` | Value plus the grammar breaches the parser accepted |
 | `Redaction` | What `UriRedact::redacted()` masks when a URI is rendered for logs |
-| `Scheme` | `Sip` or `Sips` |
 
 The URI and host types implement `UriParse`, `Display`, `Debug`, `Clone`, `PartialEq`, `Eq` and `Hash`.
 Parsing is a trait, not `FromStr`, so bring `sip_uri::UriParse` into scope.
 Schemes and hosts are case-insensitive and stored lowercase; parameter and
-header lookup is case-insensitive. `PartialEq` is structural, not RFC 3261
-§19.1.4 URI equivalence: parameter order and name case count. `Display` emits
-the canonical form, so `parse(display(parse(x))) == parse(x)`, though
-`display(parse(x))` need not equal `x`.
+header lookup is case-insensitive. `Eq` and `Hash` are canonical-structural
+identity, never RFC 3261 §19.1.4 URI equivalence: parameter order, parameter
+and header name case, tel: visual separators and a hostname's trailing dot all
+count. `Display` emits the canonical form, so a value re-parses from its
+`Display` as itself, while `display(parse(x))` need not equal `x`. The
+exceptions re-parse as another reading or none:
+
+- a scheme-less `SipUri`, or `Other`, whose text begins like a scheme
+- a scheme-less `SipUri` inside `Uri`, which `Uri` reads as `Other`
+- an `Other` whose text after the scheme reads as a port
+- a tel: fragment with no params before it, whose `#` reads as a phone digit
+- a `Host::Hostname` on its own that is empty or reads as an IPv4 address
 
 ## SipUri
 
@@ -188,11 +197,16 @@ written against sip-uri 0.2's `NameAddr` moves to `SipHeaderAddr`.
 Every component holds one canonical form, whether parsed or built:
 
 - Each URI component has its own allowed character set
-- Escapes of allowed characters are decoded (`%41` -> `A`); URN components
-  and tel: numbers decode none
+- Escapes of unreserved characters are decoded (`%41` -> `A`); an escaped
+  reserved character stays escaped, so `%2B` is not `+`; URN components and
+  tel: numbers decode none
 - Every other byte is an uppercase escape, whether it arrived escaped
   (`%3d` -> `%3D`) or literal (a space in a user part -> `%20`)
 - A user part also keeps a literal `#`, and `%23` stays a distinct value
+- Hostnames are lowercased as ASCII only, with no IDNA, and one that reads as
+  an IPv4 address is held as `Host::IPv4`
+- Builders and parts structs take URI text, so `with_user("%2B1")` holds
+  `%2B1`, not `+1`
 - `decode_user` fully decodes a bare user part (every `%XX`, bytes out) for
   callers holding the logical value rather than the canonical form, e.g.
   FreeSWITCH's `sip_req_user`
@@ -247,6 +261,33 @@ let keep4 = Redaction::default().user(UserMask::KeepLast(4)).drop_headers();
 assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
 ```
 
+## Serde
+
+The `serde` feature (Rust 1.71 or newer; the crates otherwise need 1.70, and raising either is a minor release) enables two forms. By default a value serializes as its parts and deserializes through the same canonizing constructor as `From` a parts struct; that impl lives in sip-uri-types. `Uri` and `Host` are tagged by kind:
+
+```json
+{"sip": {"scheme": "sip", "user": "alice", "user_params": [], "password": null,
+         "host": {"hostname": "example.com"}, "port": null,
+         "params": [["transport", "tcp"]], "headers": [], "fragment": null}}
+```
+
+A field that carries the URI as text uses an adapter from `sip_uri::serde_str`, which writes `Display` and reads with the lenient parser:
+
+```rust
+use serde::{Deserialize, Serialize};
+use sip_uri::{SipUri, Uri};
+
+#[derive(Serialize, Deserialize)]
+struct Call {
+    #[serde(with = "sip_uri::serde_str::uri")]
+    to: Uri,
+    #[serde(with = "sip_uri::serde_str::sip_uri::option", default)]
+    contact: Option<SipUri>,
+}
+```
+
+Adapters exist for `uri`, `sip_uri`, `tel_uri`, `urn_uri` and `host`, each with an `option` submodule. A read that fails reports the `ParseError`, never the text.
+
 ## Migrating from 0.2
 
 | 0.2 | 0.3 |
@@ -266,11 +307,13 @@ assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
 | `%3B` in a user part, `%40` in a URI param decoded | kept escaped, so Display round-trips |
 | a byte outside a component's grammar kept literal | escaped as `%XX`, with a warning |
 | `"*".parse::<Uri>()` is `Err` | `Uri::Other` with a `Wildcard` warning |
-| `FromStr`: `s.parse::<SipUri>()` | `UriParse`: `SipUri::parse(s)`, with `sip_uri::UriParse` in scope |
+| URI types defined in `sip_uri` | defined in `sip_uri_types`, re-exported unchanged; name `sip_uri_types` in a public API |
+| `FromStr`: `s.parse::<Uri>()`, `s.parse::<SipUri>()` | `use sip_uri::UriParse;` then `Uri::parse(s)`, `SipUri::parse(s)` |
 | inherent `parse_with_warnings`, `parse_strict` | the same names on `UriParse` |
-| inherent `redacted()` | `UriRedact::redacted()`, with `sip_uri::UriRedact` in scope |
+| inherent `uri.redacted(r)` | `use sip_uri::UriRedact;` then `uri.redacted(r)` |
 | `SipUri`, `TelUri`, `UrnUri`, `Uri` without `Hash` | `Hash`, consistent with `Eq` |
-| no parts type | `SipUriParts`, `TelUriParts`, `UrnUriParts` through `From`, and `into_parts()` |
+| no parts type | `SipUriParts`, `TelUriParts`, `UrnUriParts` through `From`, and `into_parts()`; `OtherUri::new(scheme, rest)` |
+| no serde | `serde` feature: structured by default, text through `sip_uri::serde_str` |
 
 Code that used `let Ok(uri) = s.parse() else { reject }` to refuse malformed
 input now accepts it; use `parse_strict`, or check `parse_with_warnings`'s
@@ -278,8 +321,7 @@ warnings, where conformance decides what happens next.
 
 ## Design
 
-- **Zero dependencies** -- not even `percent-encoding`. The subset needed is
-  trivial and avoids transitive dep churn.
+- **No third-party dependencies** -- sip-uri depends only on sip-uri-types, which depends on nothing but an optional `serde`. Not even `percent-encoding`: the subset needed is trivial and avoids transitive dep churn.
 - **Hand-written parser** -- the SIP URI grammar is regular enough that nom/regex
   are unnecessary overhead. Parsing follows the sofia-sip two-phase `@` discovery
   algorithm for correct handling of reserved characters in user-parts.
@@ -288,9 +330,9 @@ warnings, where conformance decides what happens next.
 - **`#[non_exhaustive]`** -- on every public enum and public-field struct.
 - **Fragment support** -- `SipUri` and `TelUri` parse and round-trip `#fragment`
   components (accepted permissively, matching sofia-sip behavior).
-- **Any-scheme fallback** -- `Uri::Other` stores unrecognized schemes (http,
-  https, data, etc.) as raw strings, so header values like `Call-Info` that
-  carry non-SIP URIs still parse.
+- **Any-scheme fallback** -- `Uri::Other` keeps URIs with unrecognized schemes
+  (http, https, data, etc.) as sent, decoding nothing, so header values like
+  `Call-Info` that carry non-SIP URIs still parse.
 
 ## RFC coverage
 
@@ -323,7 +365,7 @@ coverage, tests and gitleaks on every commit.
 - [rvoip-sip-core](https://crates.io/crates/rvoip-sip-core) -- alpha with a
   massive dependency tree.
 
-Neither is a focused, zero-dep URI-only parser.
+Neither is a focused URI-only parser without third-party dependencies.
 
 ## License
 
