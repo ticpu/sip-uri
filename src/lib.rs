@@ -16,17 +16,17 @@
 //! assert_eq!(uri.param("transport"), Some(Some("tcp")));
 //!
 //! // Parse a tel: URI
-//! let tel = TelUri::parse("tel:+15551234567;cpc=emergency").unwrap();
+//! let tel = TelUri::parse("tel:+15551234567;cpc=ordinary").unwrap();
 //! assert_eq!(tel.number(), Some("+15551234567"));
 //! assert!(tel.is_global());
 //!
-//! // Parse a URN (e.g. NG911 service identifier)
-//! let urn = UrnUri::parse("urn:service:sos").unwrap();
-//! assert_eq!(urn.nid(), Some("service"));
-//! assert_eq!(urn.nss(), Some("sos"));
+//! // Parse a URN
+//! let urn = UrnUri::parse("urn:isbn:0451450523").unwrap();
+//! assert_eq!(urn.nid(), Some("isbn"));
+//! assert_eq!(urn.nss(), Some("0451450523"));
 //!
 //! // Dispatch on URI type
-//! let uri = Uri::parse("urn:service:sos").unwrap();
+//! let uri = Uri::parse("urn:isbn:0451450523").unwrap();
 //! match uri {
 //!     Uri::Sip(sip) => println!("SIP: {sip}"),
 //!     Uri::Tel(tel) => println!("Tel: {tel}"),

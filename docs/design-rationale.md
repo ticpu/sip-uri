@@ -2,7 +2,7 @@
 
 ## Non-compliance warns; only empty input or another type's scheme is an error
 
-Whatever an input breaks in the grammar, the parser returns what it could read and reports each breach as a typed warning beside the value. `Err` means only that there is nothing to read, or that a present scheme names a different kind of URI; `Uri` answers the latter with `Other`. A PSAP cannot refuse a call over a malformed caller URI, and it owes the originating network a discrepancy report naming the breach, so rejecting loses the call and silent acceptance loses the report.
+Whatever an input breaks in the grammar, the parser returns what it could read and reports each breach as a typed warning beside the value. `Err` means only that there is nothing to read, or that a present scheme names a different kind of URI; `Uri` answers the latter with `Other`. A server handling a call often cannot refuse it over a malformed caller URI, yet the sender only gets fixed through a report naming the breach, so rejecting loses the call and silent acceptance loses the report.
 
 `UriParse::parse_with_warnings` is the base; `parse` discards the warnings, and `parse_strict` turns the first one into the error. All three run one path, so a check exists once, as a warning code, and tightening one never narrows what the lenient parsers accept.
 
@@ -26,7 +26,7 @@ Input without a scheme is kept as `Other` with a warning, even when it looks lik
 
 ## A warning names the component and position, never the text
 
-A warning carries which component broke, a typed code, the byte offset and whether the value survived, but no copy of the offending text. The user part is a caller number and warnings are what consumers log; the value itself is on the parsed struct for anyone entitled to it. Error messages follow the same rule.
+A warning carries which component broke, a typed code, the byte offset and whether the value survived, but no copy of the offending text. The user part is often a phone number and warnings are what consumers log; the value itself is on the parsed struct for anyone entitled to it. Error messages follow the same rule.
 
 ## `@` discovery follows sofia-sip, and a header-shaped user part warns
 
@@ -34,7 +34,7 @@ The user part may carry `;` `?` `/` unescaped, so the delimiter is the first `@`
 
 ## User-params are split out of the user part
 
-The `telephone-subscriber` form in userinfo is split into the user and its `;`-separated params, rather than kept flat as sofia-sip does, because NG9-1-1 carries `cpc` and `oli` there and consumers need them typed. A caller wanting the unsplit string reconstructs it from both accessors.
+The `telephone-subscriber` form in userinfo is split into the user and its `;`-separated params, rather than kept flat as sofia-sip does, because telephony networks carry params such as `cpc` there and consumers need them typed. A caller wanting the unsplit string reconstructs it from both accessors.
 
 ## `param-unreserved` accepts `@` and `,`, with a warning
 

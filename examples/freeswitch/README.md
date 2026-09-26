@@ -113,7 +113,7 @@ Where the parse should be recorded rather than just tested — so that `info`,
         data="^^|${spawn_stream($${conf_dir}/bin/fs-sip-uri vars uri_ ${sip_h_X-Caller-Id-Number})}"/>
 ```
 
-`sip:+15551234567;cpc=emergency@198.51.100.1;user=phone` then sets
+`sip:+15551234567;cpc=ordinary@198.51.100.1;user=phone` then sets
 `uri_type`, `uri_scheme`, `uri_user`, `uri_host`, `uri_uparam_cpc`,
 `uri_param_user` and `uri_keys`. Absent components are not emitted, so they
 stay unset. A repeated parameter keeps its first value, as `get` does. The

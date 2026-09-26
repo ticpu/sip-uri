@@ -88,11 +88,11 @@ pub trait UriRedact: Sized {
     /// ```
     /// use sip_uri::{Redaction, SipUri, UriParse, UriRedact, UserMask};
     ///
-    /// let uri = SipUri::parse("sip:+15551234567;cpc=emergency:pw@example.com").unwrap();
+    /// let uri = SipUri::parse("sip:+15551234567;cpc=ordinary:pw@example.com").unwrap();
     /// assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com");
     /// assert_eq!(
     ///     uri.redacted(Redaction::default().user(UserMask::KeepLast(4))).to_string(),
-    ///     "sip:+xxxxxxx4567;cpc=emergency:***@example.com"
+    ///     "sip:+xxxxxxx4567;cpc=ordinary:***@example.com"
     /// );
     /// ```
     fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Self>;

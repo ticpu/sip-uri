@@ -16,13 +16,13 @@ assert_eq!(uri.user(), Some("alice"));
 assert_eq!(uri.host().unwrap().to_string(), "example.com");
 assert_eq!(uri.param("transport"), Some(Some("tcp")));
 
-let tel = TelUri::parse("tel:+15551234567;cpc=emergency").unwrap();
+let tel = TelUri::parse("tel:+15551234567;cpc=ordinary").unwrap();
 assert_eq!(tel.number(), Some("+15551234567"));
 assert!(tel.is_global());
 
-let urn = UrnUri::parse("urn:service:sos").unwrap();
-assert_eq!(urn.nid(), Some("service"));
-assert_eq!(urn.nss(), Some("sos"));
+let urn = UrnUri::parse("urn:isbn:0451450523").unwrap();
+assert_eq!(urn.nid(), Some("isbn"));
+assert_eq!(urn.nss(), Some("0451450523"));
 ```
 
 ```toml
@@ -68,13 +68,13 @@ use sip_uri::{Scheme, SipUri, UriParse};
 
 // Full SIP URI with user-params, password, port, params, headers
 let uri = SipUri::parse(
-    "sips:+15551234567;cpc=emergency:secret@[2001:db8::1]:5061;user=phone?Subject=test",
+    "sips:+15551234567;cpc=ordinary:secret@[2001:db8::1]:5061;user=phone?Subject=test",
 )
 .unwrap();
 
 assert_eq!(uri.scheme(), Some(Scheme::Sips));
 assert_eq!(uri.user(), Some("+15551234567"));
-assert_eq!(uri.user_params(), &[("cpc".into(), Some("emergency".into()))]);
+assert_eq!(uri.user_params(), &[("cpc".into(), Some("ordinary".into()))]);
 assert_eq!(uri.password(), Some("secret"));
 assert_eq!(uri.port(), Some(5061));
 assert_eq!(uri.param("user"), Some(Some("phone")));
@@ -90,8 +90,8 @@ user part and exposed via `user_params()`:
 ```rust
 use sip_uri::{SipUri, UriParse};
 
-// NG911 pattern: user-params carry tel: semantics inside a SIP URI
-let uri = SipUri::parse("sip:+15551234567;cpc=emergency;oli=0@198.51.100.1;user=phone").unwrap();
+// A telephone number with its tel: params, carried inside a SIP URI
+let uri = SipUri::parse("sip:+15551234567;cpc=ordinary;ext=100@198.51.100.1;user=phone").unwrap();
 
 assert_eq!(uri.user(), Some("+15551234567"));
 assert_eq!(uri.user_params().len(), 2);
@@ -139,33 +139,33 @@ Brackets are the `IPv6reference` production, so `[198.51.100.1]` is rejected.
 ```rust
 use sip_uri::{TelUri, UriParse};
 
-let uri = TelUri::parse("tel:+15551234567;cpc=emergency;oli=0").unwrap();
+let uri = TelUri::parse("tel:+15551234567;ext=100").unwrap();
 assert_eq!(uri.number(), Some("+15551234567"));
 assert!(uri.is_global());
-assert_eq!(uri.param("cpc"), Some(Some("emergency")));
+assert_eq!(uri.param("ext"), Some(Some("100")));
 
-// Local numbers (no + prefix)
-let local = TelUri::parse("tel:911").unwrap();
+// Local numbers (no + prefix) carry a phone-context
+let local = TelUri::parse("tel:7042;phone-context=example.com").unwrap();
 assert!(!local.is_global());
 ```
 
 ## UrnUri
 
-URN parsing per RFC 8141. Used in SIP for NG911 service identifiers,
-3GPP IMS service types, GSMA IMEI, and NENA call/incident tracking.
+URN parsing per RFC 8141. SIP carries URNs as service identifiers (RFC 5031),
+3GPP IMS service types, and device identifiers such as GSMA IMEI.
 
 ```rust
 use sip_uri::{UriParse, UrnUri};
 
-// NG911 emergency service identifier
-let urn = UrnUri::parse("urn:service:sos.fire").unwrap();
+// Service URN (RFC 5031)
+let urn = UrnUri::parse("urn:service:counseling").unwrap();
 assert_eq!(urn.nid(), Some("service"));
-assert_eq!(urn.nss(), Some("sos.fire"));
+assert_eq!(urn.nss(), Some("counseling"));
 
-// NENA call tracking identifier
-let urn = UrnUri::parse("urn:nena:callid:abc123:host.example.com").unwrap();
-assert_eq!(urn.nid(), Some("nena"));
-assert_eq!(urn.nss(), Some("callid:abc123:host.example.com"));
+// IETF document identifier
+let urn = UrnUri::parse("urn:ietf:rfc:3261").unwrap();
+assert_eq!(urn.nid(), Some("ietf"));
+assert_eq!(urn.nss(), Some("rfc:3261"));
 
 // 3GPP IMS service
 let urn = UrnUri::parse("urn:urn-7:3gpp-service.ims.icsi.mmtel").unwrap();
@@ -231,7 +231,7 @@ survived). A missing or unreadable scheme, host, port, number, NID or NSS is
 `None` with a warning. The only errors are empty input and a scheme that
 belongs to another type (`tel:` parsed as `SipUri`); `Uri` keeps anything else
 as `Other`. `parse` accepts exactly the same input and drops the warnings.
-Warnings never quote the input, since a user part is a caller number.
+Warnings never quote the input, since a user part often holds a phone number.
 
 ```rust
 use sip_uri::{Component, SipUri, UriParse, WarningCode};
