@@ -290,34 +290,7 @@ Adapters exist for `uri`, `sip_uri`, `tel_uri`, `urn_uri` and `host`, each with 
 
 ## Migrating from 0.2
 
-| 0.2 | 0.3 |
-|---|---|
-| `NameAddr` | `sip_header::SipHeaderAddr`, or `Uri` for a bare URI |
-| `ParseSipUriError`, `ParseTelUriError`, `ParseUrnError`, `ParseHostError`, `ParseUriError` | `ParseError` |
-| `"joe@example.com".parse::<SipUri>()` is `Err` | `Ok`, scheme `None`, `MissingScheme` warning |
-| `SipUri::scheme() -> Scheme`, `host() -> &Host` | `Option<Scheme>`, `Option<&Host>` |
-| `TelUri::number() -> &str` | `Option<&str>` |
-| `UrnUri::nid()`, `nss() -> &str` | `Option<&str>`, so `urn.nid() == Some("service")` |
-| `Uri::scheme() -> &str` | `Option<&str>`, lowercase for every variant |
-| `Uri::Other(String)` | `Uri::Other(OtherUri)`; `as_other()` and `into_other()` unchanged |
-| `Host::Hostname(String)` | `Host::Hostname(Hostname)`; `"x".into()` still builds one |
-| `param()` / `TelUri::param() -> Option<&Option<String>>` | `Option<Option<&str>>`; compare with `Some(Some("tcp"))` |
-| `Host::fmt_uri(f)` | `Display` |
-| builders emit their input verbatim | builders escape delimiters, keep `%XX` |
-| `%3B` in a user part, `%40` in a URI param decoded | kept escaped, so Display round-trips |
-| a byte outside a component's grammar kept literal | escaped as `%XX`, with a warning |
-| `"*".parse::<Uri>()` is `Err` | `Uri::Other` with a `Wildcard` warning |
-| URI types defined in `sip_uri` | defined in `sip_uri_types`, re-exported unchanged; name `sip_uri_types` in a public API |
-| `FromStr`: `s.parse::<Uri>()`, `s.parse::<SipUri>()` | `use sip_uri::UriParse;` then `Uri::parse(s)`, `SipUri::parse(s)` |
-| inherent `parse_with_warnings`, `parse_strict` | the same names on `UriParse` |
-| inherent `uri.redacted(r)` | `use sip_uri::UriRedact;` then `uri.redacted(r)` |
-| `SipUri`, `TelUri`, `UrnUri`, `Uri` without `Hash` | `Hash`, consistent with `Eq` |
-| no parts type | `SipUriParts`, `TelUriParts`, `UrnUriParts` through `From`, and `into_parts()`; `OtherUri::new(scheme, rest)` |
-| no serde | `serde` feature: structured by default, text through `sip_uri::serde_str` |
-
-Code that used `let Ok(uri) = s.parse() else { reject }` to refuse malformed
-input now accepts it; use `parse_strict`, or check `parse_with_warnings`'s
-warnings, where conformance decides what happens next.
+0.3 parses non-conformant input with typed warnings instead of failing, holds every component in one canonical form, and moves the value types to sip-uri-types. [docs/migrating-from-0.2.md](docs/migrating-from-0.2.md) explains each change and why, with before/after code.
 
 ## Design
 
