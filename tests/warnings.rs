@@ -354,7 +354,8 @@ fn uri_invalid_scheme() {
         assert_eq!(
             parsed
                 .value
-                .as_other(),
+                .as_other()
+                .map(|o| o.as_str()),
             Some(held)
         );
         let w = only(
@@ -489,7 +490,8 @@ fn missing_scheme_keeps_user_and_host() {
     assert_eq!(
         parsed
             .value
-            .as_other(),
+            .as_other()
+            .map(|o| o.as_str()),
         Some("alice@example.com")
     );
     only(

@@ -202,7 +202,8 @@ fn wildcard_is_other_with_a_warning() {
     assert_eq!(
         parsed
             .value
-            .as_other(),
+            .as_other()
+            .map(|o| o.as_str()),
         Some("*")
     );
     assert_eq!(parsed.warnings[0].code, WarningCode::Wildcard);

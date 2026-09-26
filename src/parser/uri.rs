@@ -103,7 +103,10 @@ mod tests {
     #[test]
     fn unknown_scheme_stored_as_other() {
         let uri = Uri::parse("http://example.com").unwrap();
-        assert_eq!(uri.as_other(), Some("http://example.com"));
+        assert_eq!(
+            uri.as_other(),
+            OtherUri::new(Some("http"), "//example.com").as_ref()
+        );
         assert_eq!(uri.scheme(), Some("http"));
         assert!(uri
             .as_sip()
@@ -114,6 +117,11 @@ mod tests {
         assert!(uri
             .as_urn()
             .is_none());
+        assert_eq!(
+            uri.into_other()
+                .map(|o| o.to_string()),
+            Some("http://example.com".to_string())
+        );
     }
 
     #[test]
@@ -129,7 +137,8 @@ mod tests {
         assert_eq!(
             parsed
                 .value
-                .as_other(),
+                .as_other()
+                .map(OtherUri::as_str),
             Some("no-colon-here")
         );
         assert_eq!(

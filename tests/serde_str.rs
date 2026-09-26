@@ -68,7 +68,8 @@ fn missing_option_is_none() {
     assert_eq!(row.contact, None);
     assert_eq!(
         row.uri
-            .as_other(),
+            .as_other()
+            .map(|o| o.as_str()),
         Some("https://example.com")
     );
 }

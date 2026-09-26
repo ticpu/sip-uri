@@ -152,7 +152,8 @@ Builders and parts structs take URI text, not logical values: `with_user("%2B1")
 | 0.2 | 0.3 |
 |---|---|
 | builders only | builders, plus `SipUriParts`, `TelUriParts`, `UrnUriParts` through `From`, and `into_parts()` |
-| `Uri::Other(String)` | `Uri::Other(OtherUri)`, built with `OtherUri::new(scheme, rest)`; `as_other()` and `into_other()` are unchanged |
+| `Uri::Other(String)` | `Uri::Other(OtherUri)`, built with `OtherUri::new(scheme, rest)` |
+| `as_other() -> Option<&str>`, `into_other() -> Option<String>` | `Option<&OtherUri>`, `Option<OtherUri>`; `as_str()` or `to_string()` gives the text |
 | `Host::Hostname(String)` | `Host::Hostname(Hostname)`; `"x".into()` still builds one, lowercased |
 
 The parts structs are `#[non_exhaustive]`, so start from `Default` and assign fields:

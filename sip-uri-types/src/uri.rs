@@ -120,10 +120,10 @@ impl Uri {
         }
     }
 
-    /// If this is an unrecognized scheme, return the URI text.
-    pub fn as_other(&self) -> Option<&str> {
+    /// If this is a URI with an unrecognized scheme, or none, return it.
+    pub fn as_other(&self) -> Option<&OtherUri> {
         match self {
-            Uri::Other(o) => Some(o.as_str()),
+            Uri::Other(o) => Some(o),
             _ => None,
         }
     }
@@ -152,10 +152,10 @@ impl Uri {
         }
     }
 
-    /// Consume and return the URI text for an unrecognized scheme.
-    pub fn into_other(self) -> Option<String> {
+    /// Consume and return the URI with an unrecognized scheme, or none.
+    pub fn into_other(self) -> Option<OtherUri> {
         match self {
-            Uri::Other(o) => Some(o.raw),
+            Uri::Other(o) => Some(o),
             _ => None,
         }
     }
