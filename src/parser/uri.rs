@@ -54,6 +54,26 @@ mod tests {
     use sip_uri_types::UrnUri;
 
     #[test]
+    fn scheme_less_text_ending_a_port_at_an_escaped_byte_round_trips() {
+        let uri = Uri::parse("l:1>\"").unwrap();
+        assert_eq!(Uri::parse(&uri.to_string()).unwrap(), uri);
+    }
+
+    #[test]
+    fn service_urn_with_port_keeps_its_nss_verbatim() {
+        let uri = Uri::parse("urn:service:sos:5060").unwrap();
+        let urn = uri
+            .as_urn()
+            .unwrap();
+        assert_eq!(urn.nid(), Some("service"));
+        assert_eq!(urn.nss(), Some("sos:5060"));
+        assert_eq!(Uri::parse(&uri.to_string()).unwrap(), uri);
+
+        let bracketed = Uri::parse("<urn:service:sos:5060>").unwrap();
+        assert_eq!(Uri::parse(&bracketed.to_string()).unwrap(), bracketed);
+    }
+
+    #[test]
     fn dispatch_sip() {
         let uri = Uri::parse("sip:alice@example.com").unwrap();
         assert!(uri

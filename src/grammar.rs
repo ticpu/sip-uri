@@ -116,8 +116,9 @@ pub(crate) fn split_scheme(input: &str) -> SchemeSplit<'_> {
         return SchemeSplit::Invalid;
     }
     // `example.com:5060` is a host and port with no scheme, not scheme `example.com`.
+    // The port ends only at bytes an `Other` keeps literal, so its Display reads the same.
     let port = rest
-        .split([';', '?', '#', '/', '>'])
+        .split([';', '?', '#', '/'])
         .next()
         .unwrap_or_default();
     if !port.is_empty()
@@ -168,6 +169,35 @@ pub(crate) fn find_userinfo_at(s: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sip_uri_types::OtherUri;
+
+    fn split_kind(input: &str) -> &'static str {
+        match split_scheme(input) {
+            SchemeSplit::Named(..) => "named",
+            SchemeSplit::Invalid => "invalid",
+            SchemeSplit::Absent => "absent",
+        }
+    }
+
+    #[test]
+    fn port_rule_reads_the_same_on_canonical_text() {
+        for b in 0x00..=0x7Fu8 {
+            for raw in [
+                format!("l:1{}", b as char),
+                format!("example.com:5060{}x", b as char),
+            ] {
+                let Some(canonical) = OtherUri::new(None, &raw) else {
+                    continue;
+                };
+                let canonical = canonical.to_string();
+                assert_eq!(
+                    split_kind(&raw),
+                    split_kind(&canonical),
+                    "byte {b:#04x}: {raw:?} vs {canonical:?}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn unreserved_chars() {
