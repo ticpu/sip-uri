@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::warning::ParseWarning;
+use crate::warning::{ParseWarning, Parsed};
 
 /// Error returned by every parser in this crate.
 ///
@@ -31,3 +31,17 @@ impl fmt::Display for ParseError {
 }
 
 impl std::error::Error for ParseError {}
+
+// qual:allow(coupling, oi) reason: "into_strict needs ParseError; defined here, warning.rs stays free of error.rs"
+impl<T> Parsed<T> {
+    /// The value, or the first warning as [`ParseError::NonConformant`].
+    pub fn into_strict(self) -> Result<T, ParseError> {
+        match self
+            .warnings
+            .first()
+        {
+            Some(w) => Err(ParseError::NonConformant(*w)),
+            None => Ok(self.value),
+        }
+    }
+}
