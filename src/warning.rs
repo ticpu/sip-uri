@@ -188,72 +188,57 @@ pub enum WarningCode {
 impl WarningCode {
     /// Stable kebab-case name, for logs and machine consumers.
     pub fn as_str(self) -> &'static str {
-        match self {
-            WarningCode::InvalidChar => "invalid-char",
-            WarningCode::MalformedEscape => "malformed-escape",
-            WarningCode::EmptyName => "empty-name",
-            WarningCode::EmptySegment => "empty-segment",
-            WarningCode::PasswordWithoutUser => "password-without-user",
-            WarningCode::SignedPort => "signed-port",
-            WarningCode::EmptyPort => "empty-port",
-            WarningCode::InvalidHostLabel => "invalid-host-label",
-            WarningCode::NumericToplabel => "numeric-toplabel",
-            WarningCode::EscapedHost => "escaped-host",
-            WarningCode::UnexpectedFragment => "unexpected-fragment",
-            WarningCode::EmptyFragment => "empty-fragment",
-            WarningCode::HeaderShapedUser => "header-shaped-user",
-            WarningCode::MissingPhoneContext => "missing-phone-context",
-            WarningCode::EmptyComponent => "empty-component",
-            WarningCode::InvalidScheme => "invalid-scheme",
-            WarningCode::MissingScheme => "missing-scheme",
-            WarningCode::Wildcard => "wildcard",
-            WarningCode::MissingHost => "missing-host",
-            WarningCode::InvalidIpv6 => "invalid-ipv6",
-            WarningCode::InvalidPort => "invalid-port",
-            WarningCode::TrailingContent => "trailing-content",
-            WarningCode::MissingValue => "missing-value",
-            WarningCode::EmptyUser => "empty-user",
-            WarningCode::EmptyUserinfo => "empty-userinfo",
-            WarningCode::MissingNumber => "missing-number",
-            WarningCode::NoDigits => "no-digits",
-            WarningCode::MissingNid => "missing-nid",
-            WarningCode::MissingNss => "missing-nss",
-            WarningCode::InvalidNid => "invalid-nid",
-        }
+        self.names()
+            .0
     }
 
     fn describe(self) -> &'static str {
+        self.names()
+            .1
+    }
+
+    /// The kebab-case name and the description, one row per code.
+    fn names(self) -> (&'static str, &'static str) {
         match self {
-            WarningCode::InvalidChar => "invalid character",
-            WarningCode::MalformedEscape => "malformed percent-escape",
-            WarningCode::EmptyName => "empty parameter name",
-            WarningCode::EmptySegment => "empty segment dropped",
-            WarningCode::PasswordWithoutUser => "password without user",
-            WarningCode::SignedPort => "signed port",
-            WarningCode::EmptyPort => "empty port dropped",
-            WarningCode::InvalidHostLabel => "invalid host label",
-            WarningCode::NumericToplabel => "last host label does not start with a letter",
-            WarningCode::EscapedHost => "percent-escaped hostname",
-            WarningCode::UnexpectedFragment => "fragment not defined for this scheme",
-            WarningCode::EmptyFragment => "empty fragment dropped",
-            WarningCode::HeaderShapedUser => "user part contains '?'",
-            WarningCode::MissingPhoneContext => "local number without phone-context",
-            WarningCode::EmptyComponent => "empty component",
-            WarningCode::InvalidScheme => "invalid scheme",
-            WarningCode::MissingScheme => "missing scheme",
-            WarningCode::Wildcard => "wildcard is not a URI",
-            WarningCode::MissingHost => "missing host",
-            WarningCode::InvalidIpv6 => "invalid IPv6 reference dropped",
-            WarningCode::InvalidPort => "invalid port dropped",
-            WarningCode::TrailingContent => "trailing content dropped",
-            WarningCode::MissingValue => "header without '='",
-            WarningCode::EmptyUser => "empty user",
-            WarningCode::EmptyUserinfo => "empty userinfo dropped",
-            WarningCode::MissingNumber => "missing number",
-            WarningCode::NoDigits => "number without digits",
-            WarningCode::MissingNid => "missing namespace identifier",
-            WarningCode::MissingNss => "missing namespace-specific string",
-            WarningCode::InvalidNid => "invalid namespace identifier",
+            WarningCode::InvalidChar => ("invalid-char", "invalid character"),
+            WarningCode::MalformedEscape => ("malformed-escape", "malformed percent-escape"),
+            WarningCode::EmptyName => ("empty-name", "empty parameter name"),
+            WarningCode::EmptySegment => ("empty-segment", "empty segment dropped"),
+            WarningCode::PasswordWithoutUser => ("password-without-user", "password without user"),
+            WarningCode::SignedPort => ("signed-port", "signed port"),
+            WarningCode::EmptyPort => ("empty-port", "empty port dropped"),
+            WarningCode::InvalidHostLabel => ("invalid-host-label", "invalid host label"),
+            WarningCode::NumericToplabel => (
+                "numeric-toplabel",
+                "last host label does not start with a letter",
+            ),
+            WarningCode::EscapedHost => ("escaped-host", "percent-escaped hostname"),
+            WarningCode::UnexpectedFragment => (
+                "unexpected-fragment",
+                "fragment not defined for this scheme",
+            ),
+            WarningCode::EmptyFragment => ("empty-fragment", "empty fragment dropped"),
+            WarningCode::HeaderShapedUser => ("header-shaped-user", "user part contains '?'"),
+            WarningCode::MissingPhoneContext => (
+                "missing-phone-context",
+                "local number without phone-context",
+            ),
+            WarningCode::EmptyComponent => ("empty-component", "empty component"),
+            WarningCode::InvalidScheme => ("invalid-scheme", "invalid scheme"),
+            WarningCode::MissingScheme => ("missing-scheme", "missing scheme"),
+            WarningCode::Wildcard => ("wildcard", "wildcard is not a URI"),
+            WarningCode::MissingHost => ("missing-host", "missing host"),
+            WarningCode::InvalidIpv6 => ("invalid-ipv6", "invalid IPv6 reference dropped"),
+            WarningCode::InvalidPort => ("invalid-port", "invalid port dropped"),
+            WarningCode::TrailingContent => ("trailing-content", "trailing content dropped"),
+            WarningCode::MissingValue => ("missing-value", "header without '='"),
+            WarningCode::EmptyUser => ("empty-user", "empty user"),
+            WarningCode::EmptyUserinfo => ("empty-userinfo", "empty userinfo dropped"),
+            WarningCode::MissingNumber => ("missing-number", "missing number"),
+            WarningCode::NoDigits => ("no-digits", "number without digits"),
+            WarningCode::MissingNid => ("missing-nid", "missing namespace identifier"),
+            WarningCode::MissingNss => ("missing-nss", "missing namespace-specific string"),
+            WarningCode::InvalidNid => ("invalid-nid", "invalid namespace identifier"),
         }
     }
 
