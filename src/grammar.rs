@@ -59,6 +59,8 @@ pub(crate) fn is_hnv_char(c: u8) -> bool {
     is_unreserved(c) || is_hnv_unreserved(c)
 }
 
+pub(crate) const ESCAPE_LEN: usize = 3;
+
 /// Validate that a string contains only valid percent-encoded or allowed characters.
 /// Returns `Err` with the position of the first invalid character.
 pub(crate) fn validate_pct_encoded(input: &str, allowed: fn(u8) -> bool) -> Result<(), usize> {
@@ -71,7 +73,7 @@ pub(crate) fn validate_pct_encoded(input: &str, allowed: fn(u8) -> bool) -> Resu
                 && bytes[i + 1].is_ascii_hexdigit()
                 && bytes[i + 2].is_ascii_hexdigit()
             {
-                i += 3;
+                i += ESCAPE_LEN;
                 continue;
             }
             return Err(i);

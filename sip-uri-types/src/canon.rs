@@ -113,14 +113,18 @@ pub(crate) fn is_scheme(s: &str) -> bool {
         && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'))
 }
 
+const ESCAPE_LEN: usize = 3;
+const HEX_RADIX: u32 = 16;
+const NIBBLE_BITS: u32 = 4;
+
 /// The octet escaped by a well-formed `%XX` starting at `i`.
 fn escape_at(bytes: &[u8], i: usize) -> Option<u8> {
     if bytes.get(i) != Some(&b'%') {
         return None;
     }
-    let hi = char::from(*bytes.get(i + 1)?).to_digit(16)?;
-    let lo = char::from(*bytes.get(i + 2)?).to_digit(16)?;
-    Some(((hi << 4) | lo) as u8)
+    let hi = char::from(*bytes.get(i + 1)?).to_digit(HEX_RADIX)?;
+    let lo = char::from(*bytes.get(i + 2)?).to_digit(HEX_RADIX)?;
+    Some(((hi << NIBBLE_BITS) | lo) as u8)
 }
 
 /// Canonize one component: an escape of an octet in `decode` and a literal
@@ -136,7 +140,7 @@ fn canonize(input: &str, decode: fn(u8) -> bool, keep: fn(u8) -> bool) -> String
         match escape_at(bytes, i) {
             Some(b) => {
                 push_octet(&mut out, b, decode);
-                i += 3;
+                i += ESCAPE_LEN;
             }
             None => {
                 push_octet(&mut out, bytes[i], keep);
@@ -153,7 +157,7 @@ fn push_octet(out: &mut String, b: u8, literal: fn(u8) -> bool) {
     } else {
         const HEX: &[u8; 16] = b"0123456789ABCDEF";
         out.push('%');
-        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b >> NIBBLE_BITS) as usize] as char);
         out.push(HEX[(b & 0x0F) as usize] as char);
     }
 }
@@ -163,7 +167,7 @@ fn lowercase_literals(mut s: String) -> String {
     let mut i = 0;
     while i < s.len() {
         if s.as_bytes()[i] == b'%' {
-            i += 3;
+            i += ESCAPE_LEN;
         } else {
             if let Some(octet) = s.get_mut(i..i + 1) {
                 octet.make_ascii_lowercase();
@@ -288,7 +292,7 @@ pub fn decode_user(user: &str) -> Cow<'_, [u8]> {
         match escape_at(bytes, i) {
             Some(b) => {
                 out.push(b);
-                i += 3;
+                i += ESCAPE_LEN;
             }
             None => {
                 out.push(bytes[i]);

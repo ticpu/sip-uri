@@ -3,10 +3,12 @@ use crate::grammar::{self, SchemeSplit};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
 use sip_uri_types::{UrnUri, UrnUriParts};
 
+const NID_MAX_LEN: usize = 32;
+
 /// RFC 8141: `NID = (alphanum) 0*30(ldh) (alphanum)` where `ldh = alphanum / "-"`.
 fn is_valid_nid(nid: &str) -> bool {
     let bytes = nid.as_bytes();
-    (2..=32).contains(&bytes.len())
+    (2..=NID_MAX_LEN).contains(&bytes.len())
         && bytes[0].is_ascii_alphanumeric()
         && bytes[bytes.len() - 1].is_ascii_alphanumeric()
         && bytes

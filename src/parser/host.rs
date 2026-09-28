@@ -1,6 +1,7 @@
 use std::net::Ipv6Addr;
 
 use crate::error::ParseError;
+use crate::grammar::ESCAPE_LEN;
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
 use sip_uri_types::Host;
 
@@ -109,7 +110,7 @@ fn find_host_end(s: &str) -> usize {
             b':' | b';' | b'?' | b'#' | b'>' => return i,
             b'%' if i + 2 < bytes.len() => {
                 // Skip percent-encoded sequence
-                i += 3;
+                i += ESCAPE_LEN;
             }
             _ => i += 1,
         }
