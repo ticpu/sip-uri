@@ -39,6 +39,8 @@
 //!
 //! The minimum supported Rust version is 1.70, 1.71 with the `serde` feature. Raising it is a minor release.
 
+#![forbid(unsafe_code)]
+
 mod canon;
 mod host;
 mod params;

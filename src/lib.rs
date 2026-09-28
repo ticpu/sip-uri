@@ -36,6 +36,8 @@
 //! }
 //! ```
 
+#![forbid(unsafe_code)]
+
 mod error;
 mod grammar;
 mod parser;

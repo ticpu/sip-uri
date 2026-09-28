@@ -159,19 +159,19 @@ fn push_octet(out: &mut String, b: u8, literal: fn(u8) -> bool) {
 }
 
 /// Lowercase every literal octet, leaving escape hex uppercase.
-fn lowercase_literals(s: String) -> String {
-    let mut out = s.into_bytes();
+fn lowercase_literals(mut s: String) -> String {
     let mut i = 0;
-    while i < out.len() {
-        if out[i] == b'%' {
+    while i < s.len() {
+        if s.as_bytes()[i] == b'%' {
             i += 3;
         } else {
-            out[i].make_ascii_lowercase();
+            if let Some(octet) = s.get_mut(i..i + 1) {
+                octet.make_ascii_lowercase();
+            }
             i += 1;
         }
     }
-    // SAFETY: canonized text is ASCII, and lowercasing keeps it ASCII.
-    unsafe { String::from_utf8_unchecked(out) }
+    s
 }
 
 /// Canonize a SIP user part or user-param value.
