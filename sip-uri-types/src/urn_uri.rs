@@ -52,13 +52,11 @@ impl From<UrnUriParts> for UrnUri {
             nid: p
                 .nid
                 .as_deref()
-                .filter(|n| !n.is_empty())
-                .map(canon::canonize_nid),
+                .and_then(hold_nid),
             nss: p
                 .nss
                 .as_deref()
-                .filter(|n| !n.is_empty())
-                .map(canon::canonize_nss),
+                .and_then(hold_nss),
             r_component: p
                 .r_component
                 .as_deref()
@@ -75,6 +73,14 @@ impl From<UrnUriParts> for UrnUri {
     }
 }
 
+fn hold_nid(nid: &str) -> Option<String> {
+    (!nid.is_empty()).then(|| canon::canonize_nid(nid))
+}
+
+fn hold_nss(nss: &str) -> Option<String> {
+    (!nss.is_empty()).then(|| canon::canonize_nss(nss))
+}
+
 impl From<UrnUri> for UrnUriParts {
     fn from(uri: UrnUri) -> Self {
         uri.into_parts()
@@ -85,13 +91,14 @@ impl UrnUri {
     /// Create a new URN with the given NID and NSS.
     ///
     /// Both are canonized like parsed text, and the NID is lowercased.
-    pub fn new(nid: impl Into<String>, nss: impl Into<String>) -> Self {
-        UrnUriParts {
-            nid: Some(nid.into()),
-            nss: Some(nss.into()),
-            ..Default::default()
+    pub fn new(nid: impl AsRef<str>, nss: impl AsRef<str>) -> Self {
+        UrnUri {
+            nid: hold_nid(nid.as_ref()),
+            nss: hold_nss(nss.as_ref()),
+            r_component: None,
+            q_component: None,
+            f_component: None,
         }
-        .into()
     }
 
     /// The components, in canonical form.
@@ -106,20 +113,20 @@ impl UrnUri {
     }
 
     /// Set the resolution component (`?+`).
-    pub fn with_r_component(mut self, r: impl Into<String>) -> Self {
-        self.r_component = Some(canon::canonize_urn_r(&r.into()));
+    pub fn with_r_component(mut self, r: impl AsRef<str>) -> Self {
+        self.r_component = Some(canon::canonize_urn_r(r.as_ref()));
         self
     }
 
     /// Set the query component (`?=`).
-    pub fn with_q_component(mut self, q: impl Into<String>) -> Self {
-        self.q_component = Some(canon::canonize_urn_q(&q.into()));
+    pub fn with_q_component(mut self, q: impl AsRef<str>) -> Self {
+        self.q_component = Some(canon::canonize_urn_q(q.as_ref()));
         self
     }
 
     /// Set the fragment component (`#`).
-    pub fn with_f_component(mut self, f: impl Into<String>) -> Self {
-        self.f_component = Some(canon::canonize_fragment(&f.into()));
+    pub fn with_f_component(mut self, f: impl AsRef<str>) -> Self {
+        self.f_component = Some(canon::canonize_fragment(f.as_ref()));
         self
     }
 

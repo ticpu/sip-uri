@@ -196,7 +196,8 @@ The collections are opaque types instead of slices of tuples, so their storage c
 | `user_params() -> &[(String, Option<String>)]` | `&UserParams`, the same API |
 | `headers() -> &[(String, String)]` | `&Headers`, the same API; a value is `Option<&str>` |
 | `header(name) -> Option<&str>` | `Option<Option<&str>>`, like `param()` |
-| `with_header(name, value)` | `with_header(name, Some(value))` |
+| `with_header(name, value)` | `with_header(name, Some(value))`, the value an `Option<&str>` |
+| `with_param(name, Some(value.into()))`, `with_user_param(…)` | `with_param(name, Some(value))`: values are `Option<&str>`, as in `Params::with` |
 | `with_user_params(Vec<…>)` | takes a `UserParams`, or the same `Vec` through `From` |
 
 `push`, `From` and `collect()` canonize each pair by its component's grammar, which is why user-params have a type of their own: `=` is literal in a user-param value and escaped in a URI param. A header written without `=`, as in `sip:example.com?Flag`, holds no value and prints as it came; 0.2 read it as empty and printed `?Flag=`.

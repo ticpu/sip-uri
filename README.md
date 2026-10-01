@@ -108,7 +108,7 @@ let uri = SipUri::new(Host::IPv4(Ipv4Addr::new(198, 51, 100, 1)))
     .with_scheme(Scheme::Sips)
     .with_user("+15551234567")
     .with_port(5061)
-    .with_param("transport", Some("tcp".into()));
+    .with_param("transport", Some("tcp"));
 
 assert_eq!(uri.to_string(), "sips:+15551234567@198.51.100.1:5061;transport=tcp");
 ```

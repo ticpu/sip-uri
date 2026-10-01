@@ -14,7 +14,7 @@
 //!
 //! let uri = SipUri::new(Host::Hostname("example.com".into()))
 //!     .with_user("+15551234567")
-//!     .with_param("user", Some("phone".into()));
+//!     .with_param("user", Some("phone"));
 //! assert_eq!(uri.to_string(), "sip:+15551234567@example.com;user=phone");
 //!
 //! let tel = TelUri::new("+1555 123");

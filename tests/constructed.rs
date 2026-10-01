@@ -94,7 +94,7 @@ fn conformant_sip_bytes_are_never_escaped() {
             only(
                 base()
                     .with_user("u")
-                    .with_user_param(t, Some("v".into()))
+                    .with_user_param(t, Some("v"))
                     .user_params(),
             )
             .map(|(n, _)| n)
@@ -109,7 +109,7 @@ fn conformant_sip_bytes_are_never_escaped() {
             only(
                 base()
                     .with_user("u")
-                    .with_user_param("n", Some(t.into()))
+                    .with_user_param("n", Some(t))
                     .user_params(),
             )
             .and_then(|(_, v)| v)
@@ -145,7 +145,7 @@ fn conformant_sip_bytes_are_never_escaped() {
         |t| {
             only(
                 base()
-                    .with_param(t, Some("v".into()))
+                    .with_param(t, Some("v"))
                     .params(),
             )
             .map(|(n, _)| n)
@@ -159,7 +159,7 @@ fn conformant_sip_bytes_are_never_escaped() {
         |t| {
             only(
                 base()
-                    .with_param("n", Some(t.into()))
+                    .with_param("n", Some(t))
                     .params(),
             )
             .and_then(|(_, v)| v)
@@ -173,7 +173,7 @@ fn conformant_sip_bytes_are_never_escaped() {
         |t| {
             only(
                 base()
-                    .with_header(t, Some("v".into()))
+                    .with_header(t, Some("v"))
                     .headers(),
             )
             .map(|(n, _)| n)
@@ -187,7 +187,7 @@ fn conformant_sip_bytes_are_never_escaped() {
         |t| {
             only(
                 base()
-                    .with_header("n", Some(t.into()))
+                    .with_header("n", Some(t))
                     .headers(),
             )
             .and_then(|(_, v)| v)
@@ -220,7 +220,7 @@ fn conformant_tel_bytes_are_never_escaped() {
         |t| {
             only(
                 base()
-                    .with_param(t, Some("v".into()))
+                    .with_param(t, Some("v"))
                     .params(),
             )
             .map(|(n, _)| n)
@@ -234,7 +234,7 @@ fn conformant_tel_bytes_are_never_escaped() {
         |t| {
             only(
                 base()
-                    .with_param("n", Some(t.into()))
+                    .with_param("n", Some(t))
                     .params(),
             )
             .and_then(|(_, v)| v)
@@ -399,19 +399,19 @@ fn sip_values(s: &str) -> Vec<SipUri> {
             .with_user_param(s, None),
         base()
             .with_user("u")
-            .with_user_param(s, Some(s.into())),
+            .with_user_param(s, Some(s)),
         base()
             .with_user("u")
-            .with_user_param(s, Some("v".into())),
+            .with_user_param(s, Some("v")),
         base()
             .with_user("u")
-            .with_user_param("n", Some(s.into())),
-        base().with_user_param(s, Some("v".into())),
+            .with_user_param("n", Some(s)),
+        base().with_user_param(s, Some("v")),
         base()
             .with_user(s)
-            .with_user_param("", Some(s.into())),
+            .with_user_param("", Some(s)),
         base()
-            .with_user_param("", Some(s.into()))
+            .with_user_param("", Some(s))
             .with_password(s),
         base()
             .with_user_params(
@@ -419,17 +419,17 @@ fn sip_values(s: &str) -> Vec<SipUri> {
                     .with("", Some(s))
                     .with(s, None),
             )
-            .with_param("", Some(s.into())),
+            .with_param("", Some(s)),
         base().with_password(s),
         base()
             .with_user("u")
             .with_password(s),
         base().with_param(s, None),
-        base().with_param(s, Some(s.into())),
-        base().with_param(s, Some("v".into())),
-        base().with_param("n", Some(s.into())),
-        base().with_header(s, Some(s.into())),
-        base().with_header("n", Some(s.into())),
+        base().with_param(s, Some(s)),
+        base().with_param(s, Some("v")),
+        base().with_param("n", Some(s)),
+        base().with_header(s, Some(s)),
+        base().with_header("n", Some(s)),
         base().with_header(s, None),
         base()
             .with_header("h", None)
@@ -437,7 +437,7 @@ fn sip_values(s: &str) -> Vec<SipUri> {
         base().with_fragment(s),
         base()
             .with_param("n", None)
-            .with_header("h", Some("v".into()))
+            .with_header("h", Some("v"))
             .with_fragment(s),
         SipUri::new(Host::Hostname(Hostname::from(s))),
         SipUri::new(Host::Hostname(Hostname::from(s)))
@@ -453,12 +453,12 @@ fn tel_values(s: &str) -> Vec<TelUri> {
         TelUri::new(s),
         TelUri::new(s).with_param("n", None),
         base().with_param(s, None),
-        base().with_param(s, Some(s.into())),
-        base().with_param("n", Some(s.into())),
+        base().with_param(s, Some(s)),
+        base().with_param("n", Some(s)),
         base()
             .with_param("n", None)
             .with_fragment(s),
-        TelUri::from(TelUriParts::default()).with_param("n", Some(s.into())),
+        TelUri::from(TelUriParts::default()).with_param("n", Some(s)),
     ]
 }
 

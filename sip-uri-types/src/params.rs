@@ -94,12 +94,12 @@ macro_rules! pair_list {
             }
 
             /// Append a pair, canonized.
-            pub fn push(&mut self, name: &str, value: Option<&str>) {
-                push_pair(&mut self.0, name, value, $canonize);
+            pub fn push(&mut self, name: impl AsRef<str>, value: Option<&str>) {
+                push_pair(&mut self.0, name.as_ref(), value, $canonize);
             }
 
             /// Append a pair, canonized, and return the list.
-            pub fn with(mut self, name: &str, value: Option<&str>) -> Self {
+            pub fn with(mut self, name: impl AsRef<str>, value: Option<&str>) -> Self {
                 self.push(name, value);
                 self
             }
@@ -127,7 +127,7 @@ macro_rules! pair_list {
                 let mut list = Self::default();
                 for (name, value) in pairs {
                     list.push(
-                        name.as_ref(),
+                        name,
                         value
                             .as_ref()
                             .map(AsRef::as_ref),

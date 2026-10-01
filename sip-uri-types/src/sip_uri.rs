@@ -86,8 +86,7 @@ impl From<SipUriParts> for SipUri {
             fragment: p
                 .fragment
                 .as_deref()
-                .filter(|f| !f.is_empty())
-                .map(canon::canonize_sip_fragment),
+                .and_then(hold_fragment),
         }
     }
 }
@@ -149,6 +148,10 @@ fn hold_user(user: Option<String>, user_params: &UserParams) -> Option<String> {
         None if !user_params.is_empty() => Some(String::new()),
         user => user,
     }
+}
+
+fn hold_fragment(fragment: &str) -> Option<String> {
+    (!fragment.is_empty()).then(|| canon::canonize_sip_fragment(fragment))
 }
 
 /// SIP URI scheme.
@@ -216,8 +219,8 @@ impl SipUri {
 
     /// Set the user part, canonized like parsed text: a delimiter or byte
     /// outside the user grammar is escaped, so it cannot add user-params.
-    pub fn with_user(mut self, user: impl Into<String>) -> Self {
-        self.user = hold_user(Some(canon::canonize_user(&user.into())), &self.user_params);
+    pub fn with_user(mut self, user: impl AsRef<str>) -> Self {
+        self.user = hold_user(Some(canon::canonize_user(user.as_ref())), &self.user_params);
         self
     }
 
@@ -230,16 +233,16 @@ impl SipUri {
 
     /// Add a single user-param (parameter within the userinfo, before `@`),
     /// escaping any delimiter in the name or value.
-    pub fn with_user_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
+    pub fn with_user_param(mut self, name: impl AsRef<str>, value: Option<&str>) -> Self {
         self.user_params
-            .push(&name.into(), value.as_deref());
+            .push(name, value);
         self.user = hold_user(self.user, &self.user_params);
         self
     }
 
     /// Set the password, escaping any delimiter in it.
-    pub fn with_password(mut self, password: impl Into<String>) -> Self {
-        self.password = Some(canon::canonize_password(&password.into()));
+    pub fn with_password(mut self, password: impl AsRef<str>) -> Self {
+        self.password = Some(canon::canonize_password(password.as_ref()));
         self
     }
 
@@ -250,24 +253,23 @@ impl SipUri {
     }
 
     /// Add a URI parameter, escaping any delimiter in the name or value.
-    pub fn with_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
+    pub fn with_param(mut self, name: impl AsRef<str>, value: Option<&str>) -> Self {
         self.params
-            .push(&name.into(), value.as_deref());
+            .push(name, value);
         self
     }
 
     /// Add a header, escaping any delimiter in the name or value. `None`
     /// writes the name alone, without `=`.
-    pub fn with_header(mut self, name: impl Into<String>, value: Option<String>) -> Self {
+    pub fn with_header(mut self, name: impl AsRef<str>, value: Option<&str>) -> Self {
         self.headers
-            .push(&name.into(), value.as_deref());
+            .push(name, value);
         self
     }
 
     /// Set the fragment component, escaping any delimiter in it.
-    pub fn with_fragment(mut self, fragment: impl Into<String>) -> Self {
-        let fragment = fragment.into();
-        self.fragment = (!fragment.is_empty()).then(|| canon::canonize_sip_fragment(&fragment));
+    pub fn with_fragment(mut self, fragment: impl AsRef<str>) -> Self {
+        self.fragment = hold_fragment(fragment.as_ref());
         self
     }
 
@@ -355,10 +357,10 @@ impl SipUri {
     ///
     /// let uri = SipUri::new(Host::IPv6("2001:db8::1".parse().unwrap()))
     ///     .with_user("alice")
-    ///     .with_user_param("cpc", Some("ordinary".into()))
+    ///     .with_user_param("cpc", Some("ordinary"))
     ///     .with_password("pw")
     ///     .with_port(5060)
-    ///     .with_param("transport", Some("tcp".into()));
+    ///     .with_param("transport", Some("tcp"));
     /// assert_eq!(uri.user_host().to_string(), "alice@[2001:db8::1]:5060");
     /// ```
     pub fn user_host(&self) -> UserHost<'_> {
@@ -435,7 +437,7 @@ mod tests {
     fn builder() {
         let uri = SipUri::new(Host::Hostname("example.com".into()))
             .with_user("alice")
-            .with_param("transport", Some("tcp".into()));
+            .with_param("transport", Some("tcp"));
         assert_eq!(uri.to_string(), "sip:alice@example.com;transport=tcp");
     }
 
@@ -450,7 +452,7 @@ mod tests {
         });
         let built = SipUri::new(Host::Hostname("example.com".into()))
             .with_user("a b;c")
-            .with_param("x", Some("a@b".into()));
+            .with_param("x", Some("a@b"));
         assert_eq!(uri, built);
         assert_eq!(uri.user(), Some("a%20b%3Bc"));
         assert_eq!(uri.param("x"), Some(Some("a%40b")));
@@ -491,7 +493,7 @@ mod tests {
         let host = || Host::Hostname("example.com".into());
         let uri = SipUri::new(host())
             .with_user("")
-            .with_user_param("cpc", Some("x".into()));
+            .with_user_param("cpc", Some("x"));
         assert_eq!(uri.user(), Some(""));
         assert_eq!(uri.to_string(), "sip:;cpc=x@example.com");
         let from_parts = SipUri::from(SipUriParts {
@@ -534,7 +536,7 @@ mod tests {
     fn header_without_value_prints_its_name_alone() {
         let uri = SipUri::new(Host::Hostname("example.com".into()))
             .with_header("h", None)
-            .with_header("e", Some(String::new()));
+            .with_header("e", Some(""));
         assert_eq!(uri.header("h"), Some(None));
         assert_eq!(uri.header("e"), Some(Some("")));
         assert_eq!(uri.to_string(), "sip:example.com?h&e=");

@@ -45,16 +45,22 @@ impl From<TelUriParts> for TelUri {
             number: p
                 .number
                 .as_deref()
-                .filter(|n| !n.is_empty())
-                .map(canon::canonize_tel_number),
+                .and_then(hold_number),
             params: p.params,
             fragment: p
                 .fragment
                 .as_deref()
-                .filter(|f| !f.is_empty())
-                .map(canon::canonize_fragment),
+                .and_then(hold_fragment),
         }
     }
+}
+
+fn hold_number(number: &str) -> Option<String> {
+    (!number.is_empty()).then(|| canon::canonize_tel_number(number))
+}
+
+fn hold_fragment(fragment: &str) -> Option<String> {
+    (!fragment.is_empty()).then(|| canon::canonize_fragment(fragment))
 }
 
 impl From<TelUri> for TelUriParts {
@@ -66,12 +72,12 @@ impl From<TelUri> for TelUriParts {
 impl TelUri {
     /// Create a new tel: URI with the given number, `+` first for a global
     /// one. A delimiter or byte outside the number grammar is escaped.
-    pub fn new(number: impl Into<String>) -> Self {
-        TelUriParts {
-            number: Some(number.into()),
-            ..Default::default()
+    pub fn new(number: impl AsRef<str>) -> Self {
+        TelUri {
+            number: hold_number(number.as_ref()),
+            params: Params::new(),
+            fragment: None,
         }
-        .into()
     }
 
     /// The components, in canonical form.
@@ -84,9 +90,9 @@ impl TelUri {
     }
 
     /// Add a parameter, escaping any delimiter in the name or value.
-    pub fn with_param(mut self, name: impl Into<String>, value: Option<String>) -> Self {
+    pub fn with_param(mut self, name: impl AsRef<str>, value: Option<&str>) -> Self {
         self.params
-            .push(&name.into(), value.as_deref());
+            .push(name, value);
         self
     }
 
@@ -123,9 +129,8 @@ impl TelUri {
     }
 
     /// Set the fragment component, escaping any delimiter in it.
-    pub fn with_fragment(mut self, fragment: impl Into<String>) -> Self {
-        let fragment = fragment.into();
-        self.fragment = (!fragment.is_empty()).then(|| canon::canonize_fragment(&fragment));
+    pub fn with_fragment(mut self, fragment: impl AsRef<str>) -> Self {
+        self.fragment = hold_fragment(fragment.as_ref());
         self
     }
 }
@@ -154,7 +159,7 @@ mod tests {
 
     #[test]
     fn builder() {
-        let uri = TelUri::new("+15551234567").with_param("cpc", Some("emergency".into()));
+        let uri = TelUri::new("+15551234567").with_param("cpc", Some("emergency"));
         assert_eq!(uri.to_string(), "tel:+15551234567;cpc=emergency");
     }
 

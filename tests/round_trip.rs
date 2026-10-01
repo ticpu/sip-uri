@@ -726,7 +726,7 @@ fn builder_sip_uri() {
         .with_scheme(Scheme::Sips)
         .with_user("alice")
         .with_port(5061)
-        .with_param("transport", Some("tls".into()));
+        .with_param("transport", Some("tls"));
     assert_eq!(uri.to_string(), "sips:alice@192.168.1.1:5061;transport=tls");
 }
 
@@ -734,9 +734,9 @@ fn builder_sip_uri() {
 fn builder_sip_uri_user_param() {
     let uri = SipUri::new(Host::IPv4(Ipv4Addr::new(198, 51, 100, 1)))
         .with_user("+15551234567")
-        .with_user_param("cpc", Some("emergency".into()))
-        .with_user_param("oli", Some("0".into()))
-        .with_param("user", Some("phone".into()));
+        .with_user_param("cpc", Some("emergency"))
+        .with_user_param("oli", Some("0"))
+        .with_param("user", Some("phone"));
     assert_eq!(
         uri.to_string(),
         "sip:+15551234567;cpc=emergency;oli=0@198.51.100.1;user=phone"
@@ -746,8 +746,8 @@ fn builder_sip_uri_user_param() {
 #[test]
 fn builder_tel_uri() {
     let uri = TelUri::new("+15551234567")
-        .with_param("cpc", Some("emergency".into()))
-        .with_param("oli", Some("0".into()));
+        .with_param("cpc", Some("emergency"))
+        .with_param("oli", Some("0"));
     assert_eq!(uri.to_string(), "tel:+15551234567;cpc=emergency;oli=0");
 }
 
@@ -1023,10 +1023,10 @@ fn escaped_delimiters_survive_display() {
 fn builder_input_cannot_inject_components() {
     let uri = SipUri::new(Host::Hostname("example.com".into()))
         .with_user("+15551234567;cpc=x@evil.example.com")
-        .with_user_param("a=b", Some("c;d".into()))
+        .with_user_param("a=b", Some("c;d"))
         .with_password("p:w@x")
-        .with_param("x", Some("a;b?c=d".into()))
-        .with_header("Subject", Some("a&b=c#d".into()));
+        .with_param("x", Some("a;b?c=d"))
+        .with_header("Subject", Some("a&b=c#d"));
     let reparsed = SipUri::parse(&uri.to_string()).unwrap();
     assert_eq!(reparsed, uri);
     assert_eq!(
@@ -1087,7 +1087,7 @@ fn fragments_cannot_inject_components() {
     assert_eq!(reparsed.user(), None);
 
     let tel = TelUri::new("+15551234567")
-        .with_param("cpc", Some("emergency".into()))
+        .with_param("cpc", Some("emergency"))
         .with_fragment("x y#z");
     assert_eq!(tel.fragment(), Some("x%20y#z"));
     let reparsed = TelUri::parse(&tel.to_string()).unwrap();
@@ -1189,8 +1189,7 @@ fn builder_canonization_is_idempotent() {
     .with_param(
         "p",
         uri.param("p")
-            .flatten()
-            .map(str::to_string),
+            .flatten(),
     );
     assert_eq!(rebuilt, uri);
 }

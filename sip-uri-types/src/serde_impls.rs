@@ -104,8 +104,8 @@ mod tests {
     fn sip_uri_serializes_as_parts() {
         let uri = SipUri::new(Host::Hostname("example.com".into()))
             .with_user("+15551234567")
-            .with_param("user", Some("phone".into()))
-            .with_header("Subject", Some("x".into()))
+            .with_param("user", Some("phone"))
+            .with_header("Subject", Some("x"))
             .with_header("Flag", None);
         assert_eq!(
             serde_json::to_value(&uri).unwrap(),
@@ -160,11 +160,11 @@ mod tests {
                     .unwrap(),
             ))
             .with_user("alice")
-            .with_user_param("cpc", Some("emergency".into()))
+            .with_user_param("cpc", Some("emergency"))
             .with_password("pw")
             .with_port(5061)
             .with_param("lr", None)
-            .with_header("Subject", Some("a b".into()))
+            .with_header("Subject", Some("a b"))
             .with_header("Flag", None)
             .with_fragment("f")
             .into(),
@@ -180,7 +180,7 @@ mod tests {
         );
         round_trip(
             TelUri::new("+15551234567")
-                .with_param("cpc", Some("emergency".into()))
+                .with_param("cpc", Some("emergency"))
                 .with_fragment("x")
                 .into(),
         );
