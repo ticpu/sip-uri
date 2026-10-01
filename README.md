@@ -254,18 +254,21 @@ input.
 
 ## Logging
 
-`Display` writes the user part and password. For logs, `UriRedact::redacted()` renders
-through a `Redaction`: by default the whole userinfo, or a tel: number, becomes
-`***`, and the caller relaxes that per deployment policy. `Debug` writes a
-password as `***` but the user part as it is.
+`Display` writes the user part and password. For logs, `UriRedact::redacted()` renders through a `Redaction`, and the caller relaxes it per deployment policy. By default:
+
+- the whole userinfo, or a tel: number, becomes `***`;
+- every URI header value becomes `***` (`?Subject=***`), since headers such as `P-Asserted-Identity` carry identities; a header without a value stays its name alone;
+- params are shown, except those named in `params()`.
+
+`Debug` writes a password as `***` but the user part as it is.
 
 ```rust
-use sip_uri::{Redaction, SipUri, UriParse, UriRedact, UserMask};
+use sip_uri::{HeaderMask, Redaction, SipUri, UriParse, UriRedact, UserMask};
 
-let uri = SipUri::parse("sip:+15551234567:pw@example.com").unwrap();
-assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com");
-let keep4 = Redaction::default().user(UserMask::KeepLast(4)).drop_headers();
-assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
+let uri = SipUri::parse("sip:+15551234567:pw@example.com?Subject=x").unwrap();
+assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com?Subject=***");
+let keep4 = Redaction::default().user(UserMask::KeepLast(4)).headers(HeaderMask::Visible);
+assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com?Subject=x");
 ```
 
 ## Serde

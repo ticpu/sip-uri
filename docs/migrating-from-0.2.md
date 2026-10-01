@@ -205,15 +205,15 @@ The collections are opaque types instead of slices of tuples, so their storage c
 
 ## Logging
 
-`Display` writes the user part and password. For logs, use the redacted rendering, which masks the whole userinfo (or a tel: number) by default:
+`Display` writes the user part and password. For logs, use the redacted rendering. By default it masks the whole userinfo (or a tel: number) and every URI header value, since headers such as `P-Asserted-Identity` carry identities; `HeaderMask::Visible` shows headers, `drop_headers()` leaves them out:
 
 ```rust
-use sip_uri::{Redaction, SipUri, UriParse, UriRedact, UserMask};
+use sip_uri::{HeaderMask, Redaction, SipUri, UriParse, UriRedact, UserMask};
 
-let uri = SipUri::parse("sip:+15551234567:pw@example.com").unwrap();
-assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com");
-let keep4 = Redaction::default().user(UserMask::KeepLast(4));
-assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com");
+let uri = SipUri::parse("sip:+15551234567:pw@example.com?Subject=x").unwrap();
+assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com?Subject=***");
+let keep4 = Redaction::default().user(UserMask::KeepLast(4)).headers(HeaderMask::Visible);
+assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com?Subject=x");
 ```
 
 `redacted()` comes from the `UriRedact` trait, so import it.

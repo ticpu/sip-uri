@@ -20,17 +20,33 @@ pub enum UserMask {
     Visible,
 }
 
+/// How the headers of a SIP URI are rendered by [`Redaction`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum HeaderMask {
+    /// Each value becomes `***`; names stay, and a header without a value
+    /// stays its name alone.
+    Values,
+    /// Headers are shown as Display writes them.
+    Visible,
+    /// Headers are left out.
+    Dropped,
+}
+
 /// What a redacted rendering masks.
 ///
 /// [`Redaction::default`] masks the whole userinfo, or a tel: number, and
-/// nothing else. A password is `***` under every [`UserMask`]. URN and
-/// unrecognized URIs render unmasked, so an identifier such as an IMEI in a
-/// URN NSS is the caller's to keep out of logs.
+/// every URI header value, since headers such as `P-Asserted-Identity`
+/// carry identities: `sip:***@example.com?Subject=***`. Params are shown
+/// unless named in [`Redaction::params`]. A password is `***` under every
+/// [`UserMask`]. URN and unrecognized URIs render unmasked, so an
+/// identifier such as an IMEI in a URN NSS is the caller's to keep out of
+/// logs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Redaction<'a> {
     user: UserMask,
-    drop_headers: bool,
+    headers: HeaderMask,
     params: &'a [&'a str],
 }
 
@@ -38,7 +54,7 @@ impl Default for Redaction<'_> {
     fn default() -> Self {
         Redaction {
             user: UserMask::Full,
-            drop_headers: false,
+            headers: HeaderMask::Values,
             params: &[],
         }
     }
@@ -56,10 +72,20 @@ impl<'a> Redaction<'a> {
         self.user
     }
 
-    /// Leave URI headers out of the rendering.
-    pub fn drop_headers(mut self) -> Self {
-        self.drop_headers = true;
+    /// Set how URI headers are rendered.
+    pub fn headers(mut self, mask: HeaderMask) -> Self {
+        self.headers = mask;
         self
+    }
+
+    /// How URI headers are rendered.
+    pub fn header_mask(&self) -> HeaderMask {
+        self.headers
+    }
+
+    /// Leave URI headers out of the rendering: [`HeaderMask::Dropped`].
+    pub fn drop_headers(self) -> Self {
+        self.headers(HeaderMask::Dropped)
     }
 
     /// Render the values of these params (case-insensitive) as `***`.
@@ -200,7 +226,7 @@ impl fmt::Display for Redacted<'_, SipUri> {
                 .iter(),
             how,
         )?;
-        if !how.drop_headers {
+        if how.headers != HeaderMask::Dropped {
             for (i, (name, value)) in uri
                 .headers()
                 .iter()
@@ -208,8 +234,10 @@ impl fmt::Display for Redacted<'_, SipUri> {
             {
                 let sep = if i == 0 { '?' } else { '&' };
                 write!(f, "{sep}{name}")?;
-                if let Some(value) = value {
-                    write!(f, "={value}")?;
+                match value {
+                    Some(_) if how.headers == HeaderMask::Values => write!(f, "={MASK}")?,
+                    Some(v) => write!(f, "={v}")?,
+                    None => {}
                 }
             }
         }

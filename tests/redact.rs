@@ -1,4 +1,4 @@
-use sip_uri::{Redaction, SipUri, TelUri, Uri, UriParse, UriRedact, UserMask};
+use sip_uri::{HeaderMask, Redaction, SipUri, TelUri, Uri, UriParse, UriRedact, UserMask};
 
 fn sip(s: &str) -> SipUri {
     SipUri::parse(s).unwrap()
@@ -10,7 +10,33 @@ fn default_masks_whole_userinfo() {
     assert_eq!(
         uri.redacted(Redaction::default())
             .to_string(),
-        "sips:***@example.com:5061;user=phone?Subject=x"
+        "sips:***@example.com:5061;user=phone?Subject=***"
+    );
+}
+
+#[test]
+fn header_values_are_masked_unless_shown() {
+    let uri = sip("sip:example.com?P-Asserted-Identity=sip:%2B15551234567%40example.com&Flag&E=");
+    let render = |how: Redaction| {
+        uri.redacted(how)
+            .to_string()
+    };
+    assert_eq!(Redaction::default().header_mask(), HeaderMask::Values);
+    assert_eq!(
+        render(Redaction::default()),
+        "sip:example.com?P-Asserted-Identity=***&Flag&E=***"
+    );
+    assert_eq!(
+        render(Redaction::default().headers(HeaderMask::Visible)),
+        uri.to_string()
+    );
+    assert_eq!(
+        render(Redaction::default().drop_headers()),
+        render(Redaction::default().headers(HeaderMask::Dropped))
+    );
+    assert_eq!(
+        render(Redaction::default().drop_headers()),
+        "sip:example.com"
     );
 }
 
