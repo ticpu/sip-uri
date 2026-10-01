@@ -36,7 +36,7 @@ Rust's orphan rule lets `FromStr` be implemented only in the crate that defines 
 
 ## Non-conformant input parses, with warnings
 
-In 0.2, most grammar breaches were an `Err`. In 0.3, the parser returns whatever it could read and reports each breach:
+0.2.9 already had `parse_with_warnings`, `Parsed`, `ParseWarning`, `Component`, `WarningCode` and `WarningKind`, as inherent methods and types, for the few breaches it accepted; most grammar breaches were still an `Err`. In 0.3 most of those errors became warnings, with new `WarningCode`s, and the methods moved to the `UriParse` trait, which adds `parse_strict`. The parser returns whatever it could read and reports each breach:
 
 ```rust
 use sip_uri::{Component, SipUri, UriParse, WarningCode};
@@ -86,7 +86,7 @@ if parsed.has_warnings() {
 
 `Parsed::into_strict()` does the same after the fact. The strict parser runs the lenient one and checks its warnings, so both accept and read input the same way; they differ only in what they return.
 
-## One `ParseError` replaces the five error types
+## One `ParseError` replaces the six error types
 
 | 0.2 | 0.3 |
 |---|---|
