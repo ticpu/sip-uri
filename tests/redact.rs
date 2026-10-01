@@ -41,6 +41,15 @@ fn header_values_are_masked_unless_shown() {
 }
 
 #[test]
+fn masks_param_ignores_ascii_case() {
+    let how = Redaction::default().params(["ParticipantId"]);
+    assert!(how.masks_param("participantid"));
+    assert!(how.masks_param("PARTICIPANTID"));
+    assert!(!how.masks_param("transport"));
+    assert!(!Redaction::default().masks_param("participantid"));
+}
+
+#[test]
 fn user_mask_reads_back() {
     assert_eq!(Redaction::default().user_mask(), UserMask::Full);
     assert_eq!(

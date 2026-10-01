@@ -134,7 +134,8 @@ impl Redaction {
         self
     }
 
-    fn masks_param(&self, name: &str) -> bool {
+    /// Whether [`params`](Redaction::params) names `name`, ignoring ASCII case.
+    pub fn masks_param(&self, name: &str) -> bool {
         self.params
             .iter()
             .any(|p| p.eq_ignore_ascii_case(name))
