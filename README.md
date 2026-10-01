@@ -57,6 +57,7 @@ count. `Display` emits the canonical form, so a value re-parses from its
 exceptions re-parse as another reading or none:
 
 - a scheme-less `SipUri`, or `Other`, whose text begins like a scheme
+- a scheme-less `SipUri` with a password, whose `:` reads as the end of a scheme
 - a scheme-less `SipUri` inside `Uri`, which `Uri` reads as `Other`
 - an `Other` whose text after the scheme reads as a port
 - a tel: fragment with no params before it, whose `#` reads as a phone digit

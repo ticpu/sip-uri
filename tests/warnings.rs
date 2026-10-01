@@ -368,6 +368,41 @@ fn uri_invalid_scheme() {
 }
 
 #[test]
+fn unreadable_scheme_prefix_is_the_user_part() {
+    let (uri, w) = sip("<sip:+15551234567;cpc=ordinary@example.com:5060;transport=tcp>");
+    assert_eq!(uri.scheme(), None);
+    assert_eq!(uri.user(), Some("%3Csip%3A+15551234567"));
+    assert_eq!(uri.user_param("cpc"), Some(Some("ordinary")));
+    assert_eq!(uri.password(), None);
+    assert_eq!(uri.host(), Some(&Host::Hostname("example.com".into())));
+    assert_eq!(uri.port(), Some(5060));
+    assert_eq!(uri.param("transport"), Some(Some("tcp%3E")));
+    assert_eq!(w[0].code, WarningCode::InvalidScheme);
+    assert_eq!(w[0].position, Some(0));
+    assert_eq!(SipUri::parse(&uri.to_string()).unwrap(), uri);
+
+    let (uri, w) = sip("  sip:alice@example.com  ");
+    assert_eq!(uri.user(), Some("%20%20sip%3Aalice"));
+    assert_eq!(uri.password(), None);
+    assert_eq!(w[0].code, WarningCode::InvalidScheme);
+    assert_eq!(SipUri::parse(&uri.to_string()).unwrap(), uri);
+}
+
+#[test]
+fn missing_scheme_keeps_the_password() {
+    let parsed = SipUri::parse_with_warnings("alice:5060;x@example.com").unwrap();
+    let uri = parsed.value;
+    assert_eq!(uri.scheme(), None);
+    assert_eq!(uri.user(), Some("alice"));
+    assert_eq!(uri.password(), Some("5060%3Bx"));
+    assert_eq!(parsed.warnings[0].code, WarningCode::MissingScheme);
+    assert_eq!(
+        SipUri::parse("alice:pw@example.com"),
+        Err(sip_uri::ParseError::SchemeMismatch)
+    );
+}
+
+#[test]
 fn uri_forwards_scheme_warnings() {
     let parsed = Uri::parse_with_warnings("sip:example.com:+5060").unwrap();
     only(&parsed.warnings, Component::Port, WarningCode::SignedPort);

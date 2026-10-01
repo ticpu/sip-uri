@@ -12,29 +12,30 @@ pub(crate) fn parse(input: &str) -> Result<Parsed<SipUri>, ParseError> {
     let mut warnings = Warnings::new(input);
     let mut parts = SipUriParts::default();
 
-    let rest = match grammar::split_scheme(input) {
+    let (rest, colon_starts_password) = match grammar::split_scheme(input) {
         SchemeSplit::Named(s, rest) if s.eq_ignore_ascii_case("sip") => {
             parts.scheme = Some(Scheme::Sip);
-            rest
+            (rest, true)
         }
         SchemeSplit::Named(s, rest) if s.eq_ignore_ascii_case("sips") => {
             parts.scheme = Some(Scheme::Sips);
-            rest
+            (rest, true)
         }
         SchemeSplit::Named(..) => return Err(ParseError::SchemeMismatch),
+        // The `:` ending the unreadable prefix is that prefix's, not a password's.
         SchemeSplit::Invalid => {
             warnings.push(Component::Scheme, WarningCode::InvalidScheme, input, 0);
-            input
+            (input, false)
         }
         SchemeSplit::Absent => {
             warnings.push(Component::Scheme, WarningCode::MissingScheme, input, 0);
-            input
+            (input, true)
         }
     };
 
     let (userinfo, hostport_rest) = split_userinfo_host(rest, &mut warnings);
     if let Some(uinfo) = userinfo {
-        split_userinfo(uinfo, &mut parts, &mut warnings);
+        split_userinfo(uinfo, colon_starts_password, &mut parts, &mut warnings);
     }
     split_hostport_params_headers(hostport_rest, &mut parts, &mut warnings);
 
@@ -57,9 +58,17 @@ fn split_userinfo_host<'a>(s: &'a str, warnings: &mut Warnings) -> (Option<&'a s
 }
 
 /// Split the userinfo: `user [*(";" user-param)] [":" password]`.
-fn split_userinfo(s: &str, parts: &mut SipUriParts, warnings: &mut Warnings) {
+fn split_userinfo(
+    s: &str,
+    colon_starts_password: bool,
+    parts: &mut SipUriParts,
+    warnings: &mut Warnings,
+) {
     // `:` is not user-unreserved, so the first one starts the password.
-    let user_and_params = if let Some(colon_pos) = s.find(':') {
+    let colon = s
+        .find(':')
+        .filter(|_| colon_starts_password);
+    let user_and_params = if let Some(colon_pos) = colon {
         let pwd = &s[colon_pos + 1..];
         warnings.charset(Component::Password, pwd, grammar::is_password_char);
         parts.password = Some(pwd.to_string());

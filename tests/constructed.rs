@@ -570,7 +570,11 @@ fn schemeless_sip_uri_fails_only_where_its_text_reads_as_a_scheme() {
     for s in samples() {
         for uri in schemeless_sip_values(&s) {
             let text = uri.to_string();
-            let exception = reads_as_scheme(&text);
+            // Its `:` ends a scheme, readable or not, before it can start a password.
+            let exception = reads_as_scheme(&text)
+                || uri
+                    .password()
+                    .is_some();
             if survives(&uri) == exception {
                 failures.push(format!("{text:?}: {uri:?}"));
             }

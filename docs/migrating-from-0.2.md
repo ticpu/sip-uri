@@ -64,6 +64,7 @@ A few inputs that were errors now parse to something:
 - **Missing scheme:** `"joe@example.com"` as `SipUri` has scheme `None` and a `MissingScheme` warning. As `Uri`, it is `Uri::Other`, since `Uri` never guesses a type for scheme-less text. Parse it as `SipUri` when your context says it is SIP.
 - **Wildcard:** `"*"` as `Uri` is `Uri::Other` with a `Wildcard` warning.
 - **Brackets:** `"<sip:alice@example.com>"` as `Uri` is `Uri::Other` with a scheme warning. That text is header grammar; see [Display names](#display-names-and-header-params) below.
+- **Unreadable scheme:** as `SipUri`, text whose scheme cannot be read keeps everything up to `@` as the user part, and the `:` ending that prefix starts no password. `"<sip:+15551234567@example.com>"` has user `%3Csip%3A+15551234567` and an `InvalidScheme` warning; nothing is trimmed or dropped.
 
 ### Refusing non-conformant input
 
