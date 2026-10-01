@@ -134,72 +134,92 @@ impl Component {
     }
 }
 
-/// What a [`ParseWarning`] found.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum WarningCode {
+/// One row per code: its docs, variant, kebab-case name and description.
+macro_rules! warning_codes {
+    ($($(#[$doc:meta])* $variant:ident => $name:literal, $description:literal;)*) => {
+        /// What a [`ParseWarning`] found.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[non_exhaustive]
+        pub enum WarningCode {
+            $($(#[$doc])* $variant,)*
+        }
+
+        impl WarningCode {
+            /// Every code, in declaration order.
+            pub const ALL: &'static [WarningCode] = &[$(WarningCode::$variant),*];
+
+            fn names(self) -> (&'static str, &'static str) {
+                match self {
+                    $(WarningCode::$variant => ($name, $description),)*
+                }
+            }
+        }
+    };
+}
+
+warning_codes! {
     /// A character outside the component's character set, held as its
     /// escaped octet.
-    InvalidChar,
+    InvalidChar => "invalid-char", "invalid character";
     /// A `%` not followed by two hex digits, held as the octet `%`, `%25`.
-    MalformedEscape,
+    MalformedEscape => "malformed-escape", "malformed percent-escape";
     /// A parameter with no name before `=`.
-    EmptyName,
+    EmptyName => "empty-name", "empty parameter name";
     /// An empty `;` or `&` segment, dropped.
-    EmptySegment,
+    EmptySegment => "empty-segment", "empty segment dropped";
     /// A password with no user before it.
-    PasswordWithoutUser,
+    PasswordWithoutUser => "password-without-user", "password without user";
     /// A port written with a `+` sign.
-    SignedPort,
+    SignedPort => "signed-port", "signed port";
     /// A `:` with no port after it, dropped.
-    EmptyPort,
+    EmptyPort => "empty-port", "empty port dropped";
     /// A host label that is empty or starts or ends with `-`.
-    InvalidHostLabel,
+    InvalidHostLabel => "invalid-host-label", "invalid host label";
     /// A hostname whose last label does not start with a letter.
-    NumericToplabel,
+    NumericToplabel => "numeric-toplabel", "last host label does not start with a letter";
     /// A hostname written with percent-escapes.
-    EscapedHost,
+    EscapedHost => "escaped-host", "percent-escaped hostname";
     /// A fragment on a URI whose grammar defines none.
-    UnexpectedFragment,
+    UnexpectedFragment => "unexpected-fragment", "fragment not defined for this scheme";
     /// A `#` with nothing after it, dropped.
-    EmptyFragment,
+    EmptyFragment => "empty-fragment", "empty fragment dropped";
     /// A user part containing `?`, likely a header value whose `@` was taken
     /// as the userinfo delimiter.
-    HeaderShapedUser,
+    HeaderShapedUser => "header-shaped-user", "user part contains '?'";
     /// A local tel: number without `phone-context`.
-    MissingPhoneContext,
+    MissingPhoneContext => "missing-phone-context", "local number without phone-context";
     /// A URN `?+` or `?=` with nothing after it.
-    EmptyComponent,
+    EmptyComponent => "empty-component", "empty component";
     /// A scheme outside the RFC 3986 grammar.
-    InvalidScheme,
+    InvalidScheme => "invalid-scheme", "invalid scheme";
     /// No scheme before the rest of the URI.
-    MissingScheme,
+    MissingScheme => "missing-scheme", "missing scheme";
     /// `*`, which is not a URI but the Contact and OPTIONS wildcard.
-    Wildcard,
+    Wildcard => "wildcard", "wildcard is not a URI";
     /// No host where the grammar requires one.
-    MissingHost,
+    MissingHost => "missing-host", "missing host";
     /// A bracketed IPv6 reference that is unclosed or not an IPv6 address.
-    InvalidIpv6,
+    InvalidIpv6 => "invalid-ipv6", "invalid IPv6 reference dropped";
     /// A port that is not a number in 0-65535, dropped.
-    InvalidPort,
+    InvalidPort => "invalid-port", "invalid port dropped";
     /// Text after the host or port that starts no component, dropped.
-    TrailingContent,
+    TrailingContent => "trailing-content", "trailing content dropped";
     /// A URI header with no `=`, held without a value.
-    MissingValue,
+    MissingValue => "missing-value", "header without '='";
     /// An empty user before user-params.
-    EmptyUser,
+    EmptyUser => "empty-user", "empty user";
     /// An `@` with no userinfo before it, dropped.
-    EmptyUserinfo,
+    EmptyUserinfo => "empty-userinfo", "empty userinfo dropped";
     /// A tel: URI with no number.
-    MissingNumber,
+    MissingNumber => "missing-number", "missing number";
     /// A tel: number with no digit.
-    NoDigits,
+    NoDigits => "no-digits", "number without digits";
     /// A URN with no namespace identifier.
-    MissingNid,
+    MissingNid => "missing-nid", "missing namespace identifier";
     /// A URN with no namespace-specific string.
-    MissingNss,
+    MissingNss => "missing-nss", "missing namespace-specific string";
     /// A URN namespace identifier outside RFC 8141's length or character rules.
-    InvalidNid,
+    InvalidNid => "invalid-nid", "invalid namespace identifier";
 }
 
 impl WarningCode {
@@ -212,51 +232,6 @@ impl WarningCode {
     fn describe(self) -> &'static str {
         self.names()
             .1
-    }
-
-    /// The kebab-case name and the description, one row per code.
-    fn names(self) -> (&'static str, &'static str) {
-        match self {
-            WarningCode::InvalidChar => ("invalid-char", "invalid character"),
-            WarningCode::MalformedEscape => ("malformed-escape", "malformed percent-escape"),
-            WarningCode::EmptyName => ("empty-name", "empty parameter name"),
-            WarningCode::EmptySegment => ("empty-segment", "empty segment dropped"),
-            WarningCode::PasswordWithoutUser => ("password-without-user", "password without user"),
-            WarningCode::SignedPort => ("signed-port", "signed port"),
-            WarningCode::EmptyPort => ("empty-port", "empty port dropped"),
-            WarningCode::InvalidHostLabel => ("invalid-host-label", "invalid host label"),
-            WarningCode::NumericToplabel => (
-                "numeric-toplabel",
-                "last host label does not start with a letter",
-            ),
-            WarningCode::EscapedHost => ("escaped-host", "percent-escaped hostname"),
-            WarningCode::UnexpectedFragment => (
-                "unexpected-fragment",
-                "fragment not defined for this scheme",
-            ),
-            WarningCode::EmptyFragment => ("empty-fragment", "empty fragment dropped"),
-            WarningCode::HeaderShapedUser => ("header-shaped-user", "user part contains '?'"),
-            WarningCode::MissingPhoneContext => (
-                "missing-phone-context",
-                "local number without phone-context",
-            ),
-            WarningCode::EmptyComponent => ("empty-component", "empty component"),
-            WarningCode::InvalidScheme => ("invalid-scheme", "invalid scheme"),
-            WarningCode::MissingScheme => ("missing-scheme", "missing scheme"),
-            WarningCode::Wildcard => ("wildcard", "wildcard is not a URI"),
-            WarningCode::MissingHost => ("missing-host", "missing host"),
-            WarningCode::InvalidIpv6 => ("invalid-ipv6", "invalid IPv6 reference dropped"),
-            WarningCode::InvalidPort => ("invalid-port", "invalid port dropped"),
-            WarningCode::TrailingContent => ("trailing-content", "trailing content dropped"),
-            WarningCode::MissingValue => ("missing-value", "header without '='"),
-            WarningCode::EmptyUser => ("empty-user", "empty user"),
-            WarningCode::EmptyUserinfo => ("empty-userinfo", "empty userinfo dropped"),
-            WarningCode::MissingNumber => ("missing-number", "missing number"),
-            WarningCode::NoDigits => ("no-digits", "number without digits"),
-            WarningCode::MissingNid => ("missing-nid", "missing namespace identifier"),
-            WarningCode::MissingNss => ("missing-nss", "missing namespace-specific string"),
-            WarningCode::InvalidNid => ("invalid-nid", "invalid namespace identifier"),
-        }
     }
 
     fn kind(self) -> WarningKind {

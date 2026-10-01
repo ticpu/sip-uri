@@ -582,3 +582,23 @@ fn built_hostname_equals_parsed() {
     let parsed = SipUri::parse("sip:alice@example.com").unwrap();
     assert_eq!(built, parsed);
 }
+
+#[test]
+fn every_code_has_a_distinct_kebab_case_name() {
+    let mut names: Vec<&str> = WarningCode::ALL
+        .iter()
+        .map(|c| c.as_str())
+        .collect();
+    for name in &names {
+        assert!(
+            !name.is_empty()
+                && name
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'),
+            "{name:?}"
+        );
+    }
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), WarningCode::ALL.len());
+}
