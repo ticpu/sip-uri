@@ -9,21 +9,15 @@ percent-encoding.
 The value types live in [sip-uri-types](https://crates.io/crates/sip-uri-types), which this crate parses into and re-exports. A crate exposing a URI in its public API names `sip_uri_types`, which aims at a stable 1.x, so it does not break when parse policy here moves on a minor release.
 
 ```rust
-use sip_uri::{SipUri, TelUri, UriParse, UrnUri};
+use sip_uri::{SipUri, UriParse};
 
 let uri = SipUri::parse("sip:alice@example.com;transport=tcp").unwrap();
 assert_eq!(uri.user(), Some("alice"));
 assert_eq!(uri.host().unwrap().to_string(), "example.com");
 assert_eq!(uri.param("transport"), Some(Some("tcp")));
-
-let tel = TelUri::parse("tel:+15551234567;cpc=ordinary").unwrap();
-assert_eq!(tel.number(), Some("+15551234567"));
-assert!(tel.is_global());
-
-let urn = UrnUri::parse("urn:isbn:0451450523").unwrap();
-assert_eq!(urn.nid(), Some("isbn"));
-assert_eq!(urn.nss(), Some("0451450523"));
 ```
+
+`UriParse` is the parser for every URI type, so import it beside the type; [TelUri](#teluri) and [UrnUri](#urnuri) parse the same way.
 
 ```toml
 [dependencies]

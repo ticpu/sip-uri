@@ -8,12 +8,17 @@
 //! # Examples
 //!
 //! ```
-//! use sip_uri::{SipUri, TelUri, UriParse, UrnUri, Uri};
+//! use sip_uri::{SipUri, UriParse};
 //!
-//! // Parse a SIP URI
 //! let uri = SipUri::parse("sip:alice@example.com;transport=tcp").unwrap();
 //! assert_eq!(uri.user(), Some("alice"));
 //! assert_eq!(uri.param("transport"), Some(Some("tcp")));
+//! ```
+//!
+//! [`UriParse`] parses every URI type the same way:
+//!
+//! ```
+//! use sip_uri::{TelUri, Uri, UriParse, UrnUri};
 //!
 //! // Parse a tel: URI
 //! let tel = TelUri::parse("tel:+15551234567;cpc=ordinary").unwrap();

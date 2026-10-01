@@ -8,6 +8,8 @@ use crate::urn_uri::UrnUri;
 
 /// A URI: SIP/SIPS, tel, URN, or an opaque URI with an unrecognized scheme.
 ///
+/// Parse text into one with sip-uri's [`UriParse`](https://docs.rs/sip-uri/latest/sip_uri/trait.UriParse.html).
+///
 /// The `Other` variant keeps text without a structure of its own (e.g. `http:`,
 /// `https:`, `data:`, or text without a scheme), so header values like
 /// `Call-Info` round-trip without rejecting non-SIP URIs.

@@ -6,6 +6,8 @@ use crate::params::{self, Headers, Params, UserParams};
 
 /// SIP or SIPS URI per RFC 3261 §19.
 ///
+/// Parse text into one with sip-uri's [`UriParse`](https://docs.rs/sip-uri/latest/sip_uri/trait.UriParse.html).
+///
 /// Supports the full grammar including user-params (`;` within userinfo),
 /// password, IPv6 hosts, URI parameters, and headers. A scheme or host that
 /// is missing or unreadable is `None`.
