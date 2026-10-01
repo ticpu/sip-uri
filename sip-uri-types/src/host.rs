@@ -21,6 +21,11 @@ pub enum Host {
     /// IPv6 address (stored without brackets).
     IPv6(Ipv6Addr),
     /// DNS hostname.
+    ///
+    /// Built directly from an empty or dotted-quad name, this host prints as
+    /// text the parser reads as no host or as [`Host::IPv4`]. URI
+    /// constructors and serde hold a dotted quad as [`Host::IPv4`]; see
+    /// [`Host::from_hostname`].
     Hostname(Hostname),
 }
 
@@ -28,7 +33,10 @@ pub enum Host {
 /// however they were written.
 ///
 /// Construction lowercases, decodes escaped unreserved characters and escapes
-/// every other byte outside them; it does not otherwise validate.
+/// every other byte outside them; it does not otherwise validate. An empty or
+/// dotted-quad name is a value too, but not one the parser returns: it reads
+/// that text as no host or as [`Host::IPv4`], as URI constructors and serde
+/// hold a dotted quad.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Hostname(String);
 
