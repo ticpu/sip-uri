@@ -804,3 +804,51 @@ fn named_exceptions_take_the_other_reading() {
         Some("+15551234567#x")
     );
 }
+
+#[test]
+fn no_cr_lf_or_nul_survives_display() {
+    for c in ["\r", "\n", "\0"] {
+        let t = |s: &str| s.replace('$', c);
+        let mut shown: Vec<String> = [
+            "sip:u$;up=$:p$@h$.example.com;x=$?h=$#$",
+            "$sip:u@example.com",
+            "tel:+1555$;x=$#$",
+            "urn:ex$:a$?+$?=$#$",
+            "x-test:a$",
+            "$",
+        ]
+        .iter()
+        .filter_map(|input| Uri::parse(&t(input)).ok())
+        .map(|uri| uri.to_string())
+        .collect();
+        shown.push(
+            SipUri::new(Host::Hostname(t("h$").into()))
+                .with_user(t("u$"))
+                .with_user_param(t("n$"), Some(&t("v$")))
+                .with_password(t("p$"))
+                .with_param(t("n$"), Some(&t("v$")))
+                .with_header(t("n$"), Some(&t("v$")))
+                .with_fragment(t("f$"))
+                .to_string(),
+        );
+        shown.push(
+            TelUri::new(t("+1555$"))
+                .with_param(t("n$"), Some(&t("v$")))
+                .with_fragment(t("f$"))
+                .to_string(),
+        );
+        shown.push(
+            UrnUri::new(t("ex$"), t("a$"))
+                .with_r_component(t("r$"))
+                .with_q_component(t("q$"))
+                .with_f_component(t("f$"))
+                .to_string(),
+        );
+        if let Ok(other) = OtherUri::new(Some("x-test"), &t("a$")) {
+            shown.push(other.to_string());
+        }
+        for text in shown {
+            assert!(!text.contains(c), "{c:?} survived in {text:?}");
+        }
+    }
+}
