@@ -78,8 +78,7 @@ impl From<SipUriParts> for SipUri {
                 .map(canon::canonize_password),
             host: p
                 .host
-                .map(Host::normalized)
-                .filter(|h| !matches!(h, Host::Hostname(name) if name.is_empty())),
+                .and_then(hold_host),
             port: p.port,
             params: p.params,
             headers: p.headers,
@@ -148,6 +147,10 @@ fn hold_user(user: Option<String>, user_params: &UserParams) -> Option<String> {
         None if !user_params.is_empty() => Some(String::new()),
         user => user,
     }
+}
+
+fn hold_host(host: Host) -> Option<Host> {
+    Some(host.normalized()).filter(|h| !matches!(h, Host::Hostname(name) if name.is_empty()))
 }
 
 fn hold_fragment(fragment: &str) -> Option<String> {
@@ -245,6 +248,13 @@ impl SipUri {
         self
     }
 
+    /// Set the host, held as [`From`] a parts struct holds it: a dotted-quad
+    /// hostname as [`Host::IPv4`], an empty one as no host.
+    pub fn with_host(mut self, host: Host) -> Self {
+        self.host = hold_host(host);
+        self
+    }
+
     /// Set the port.
     pub fn with_port(mut self, port: u16) -> Self {
         self.port = Some(port);
@@ -312,6 +322,25 @@ impl SipUri {
         &self.params
     }
 
+    /// The URI parameters, to edit in place; every insertion canonizes.
+    pub fn params_mut(&mut self) -> &mut Params {
+        &mut self.params
+    }
+
+    /// The user-params, to edit in place; every insertion canonizes.
+    ///
+    /// When the guard drops, an absent user becomes empty if user-params
+    /// remain, and an empty one absent if none do, as
+    /// [`with_user_params`](Self::with_user_params) holds them.
+    pub fn user_params_mut(&mut self) -> UserParamsMut<'_> {
+        UserParamsMut(self)
+    }
+
+    /// The URI headers, to edit in place; every insertion canonizes.
+    pub fn headers_mut(&mut self) -> &mut Headers {
+        &mut self.headers
+    }
+
     /// Look up a URI parameter by name (case-insensitive): `Some(None)` when
     /// it has no value.
     pub fn param(&self, name: &str) -> Option<Option<&str>> {
@@ -364,6 +393,40 @@ impl SipUri {
     /// ```
     pub fn user_host(&self) -> UserHost<'_> {
         UserHost(self)
+    }
+}
+
+/// Mutable access to a [`SipUri`]'s user-params, returned by
+/// [`SipUri::user_params_mut`]; the user part is held again on drop.
+#[derive(Debug)]
+pub struct UserParamsMut<'a>(&'a mut SipUri);
+
+impl std::ops::Deref for UserParamsMut<'_> {
+    type Target = UserParams;
+
+    fn deref(&self) -> &UserParams {
+        &self
+            .0
+            .user_params
+    }
+}
+
+impl std::ops::DerefMut for UserParamsMut<'_> {
+    fn deref_mut(&mut self) -> &mut UserParams {
+        &mut self
+            .0
+            .user_params
+    }
+}
+
+impl Drop for UserParamsMut<'_> {
+    fn drop(&mut self) {
+        let uri = &mut *self.0;
+        uri.user = hold_user(
+            uri.user
+                .take(),
+            &uri.user_params,
+        );
     }
 }
 

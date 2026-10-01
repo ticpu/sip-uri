@@ -49,7 +49,8 @@ macro_rules! pair_list {
         $(#[$doc])*
         ///
         /// Names and values are held in canonical form: [`push`](Self::push),
-        /// [`From`] and [`FromIterator`] canonize what they are given, and a
+        /// [`set`](Self::set), [`From`] and [`FromIterator`] canonize what
+        /// they are given, and a
         /// pair with an empty name and no value is dropped. Order and
         /// duplicates are kept.
         ///
@@ -102,6 +103,47 @@ macro_rules! pair_list {
             pub fn with(mut self, name: impl AsRef<str>, value: Option<&str>) -> Self {
                 self.push(name, value);
                 self
+            }
+
+            /// Remove every pair named `name`, compared case-insensitively,
+            /// and return how many were removed.
+            pub fn remove(&mut self, name: &str) -> usize {
+                let before = self.0.len();
+                self.0
+                    .retain(|(n, _)| !n.eq_ignore_ascii_case(name));
+                before - self.0.len()
+            }
+
+            /// Keep only the pairs for which `keep` returns `true`, in order.
+            pub fn retain(&mut self, mut keep: impl FnMut(&str, Option<&str>) -> bool) {
+                self.0
+                    .retain(|(n, v)| keep(n, v.as_deref()));
+            }
+
+            /// Set the pair named `name`, canonized: the first pair whose
+            /// canonical name matches case-insensitively is replaced in place
+            /// and every later match removed, so the name is left once; with
+            /// no match the pair is appended. An empty name without a value is
+            /// dropped, as by [`push`](Self::push).
+            pub fn set(&mut self, name: impl AsRef<str>, value: Option<&str>) {
+                let name = name.as_ref();
+                if name.is_empty() && value.is_none() {
+                    return;
+                }
+                let (name, value) = $canonize(name, value);
+                let matches = |n: &String| n.eq_ignore_ascii_case(&name);
+                let Some(first) = self.0.iter().position(|(n, _)| matches(n)) else {
+                    self.0.push((name, value));
+                    return;
+                };
+                let mut index = 0;
+                self.0.retain(|(n, _)| {
+                    index += 1;
+                    index <= first + 1 || !matches(n)
+                });
+                if let Some(slot) = self.0.get_mut(first) {
+                    *slot = (name, value);
+                }
             }
         }
 
@@ -233,6 +275,54 @@ mod tests {
         let uri = Params::new().with("n", Some("a=b"));
         assert_eq!(user.get("n"), Some(Some("a=b")));
         assert_eq!(uri.get("n"), Some(Some("a%3Db")));
+    }
+
+    fn pairs(list: &Params) -> Vec<(&str, Option<&str>)> {
+        list.iter()
+            .collect()
+    }
+
+    #[test]
+    fn remove_drops_every_case_insensitive_match() {
+        let mut params = Params::new()
+            .with("Lr", None)
+            .with("transport", Some("tcp"))
+            .with("lr", Some("x"));
+        assert_eq!(params.remove("LR"), 2);
+        assert_eq!(params.remove("lr"), 0);
+        assert_eq!(pairs(&params), [("transport", Some("tcp"))]);
+    }
+
+    #[test]
+    fn retain_keeps_order() {
+        let mut params = Params::new()
+            .with("a", Some("1"))
+            .with("b", None)
+            .with("c", Some("3"));
+        params.retain(|_, value| value.is_some());
+        assert_eq!(pairs(&params), [("a", Some("1")), ("c", Some("3"))]);
+    }
+
+    #[test]
+    fn set_replaces_the_first_match_and_removes_the_rest() {
+        let mut params = Params::new()
+            .with("a", None)
+            .with("Transport", Some("udp"))
+            .with("b", None)
+            .with("transport", Some("sctp"));
+        params.set("TRANSPORT", Some("t c@p"));
+        assert_eq!(
+            pairs(&params),
+            [("a", None), ("TRANSPORT", Some("t%20c%40p")), ("b", None)]
+        );
+        params.set("lr", None);
+        assert_eq!(params.get("lr"), Some(None));
+        assert_eq!(params.len(), 4);
+        params.set("", None);
+        assert_eq!(params.len(), 4);
+        let mut set = Params::new();
+        set.set("a;b", Some("%41"));
+        assert_eq!(set, Params::new().with("a;b", Some("%41")));
     }
 
     #[test]

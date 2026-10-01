@@ -444,7 +444,89 @@ fn sip_values(s: &str) -> Vec<SipUri> {
         SipUri::new(Host::Hostname(Hostname::from(s)))
             .with_user("u")
             .with_port(5060),
+        base()
+            .with_user("u")
+            .with_host(Host::Hostname(Hostname::from(s))),
+        edit(base().with_user_param(s, Some("v")), |u| {
+            u.user_params_mut()
+                .set(s, Some(s));
+        }),
+        edit(base(), |u| {
+            u.user_params_mut()
+                .set("n", Some(s));
+        }),
+        edit(base().with_user_param(s, None), |u| {
+            u.user_params_mut()
+                .retain(|_, _| false);
+        }),
+        edit(
+            base()
+                .with_param(s, None)
+                .with_param("n", None),
+            |u| {
+                u.params_mut()
+                    .set("n", Some(s));
+                u.params_mut()
+                    .remove(s);
+            },
+        ),
+        edit(base().with_header(s, None), |u| {
+            u.headers_mut()
+                .set(s, Some(s));
+        }),
     ]
+}
+
+fn edit<T>(mut value: T, f: impl FnOnce(&mut T)) -> T {
+    f(&mut value);
+    value
+}
+
+#[test]
+fn edits_hold_what_builders_hold() {
+    let base = || SipUri::new(host()).with_user("u");
+    assert_eq!(
+        edit(SipUri::new(host()), |u| {
+            u.user_params_mut()
+                .push("cpc", Some("a b"));
+        }),
+        SipUri::new(host()).with_user_param("cpc", Some("a b"))
+    );
+    assert_eq!(
+        edit(SipUri::new(host()).with_user_param("cpc", None), |u| {
+            u.user_params_mut()
+                .remove("CPC");
+        }),
+        SipUri::new(host())
+    );
+    assert_eq!(
+        edit(base().with_param("transport", Some("udp")), |u| {
+            u.params_mut()
+                .set("transport", Some("t;x"));
+            u.headers_mut()
+                .set("h", None);
+        }),
+        base()
+            .with_param("transport", Some("t;x"))
+            .with_header("h", None)
+    );
+    assert_eq!(
+        base().with_host(Host::Hostname("198.51.100.1".into())),
+        SipUri::parse("sip:u@198.51.100.1").unwrap()
+    );
+    assert_eq!(
+        base()
+            .with_host(Host::Hostname("".into()))
+            .host(),
+        None
+    );
+    assert_eq!(
+        edit(TelUri::new("+15551234567"), |t| {
+            t.params_mut()
+                .set("cpc", Some("x"));
+        }),
+        TelUri::new("+15551234567").with_param("cpc", Some("x"))
+    );
 }
 
 fn tel_values(s: &str) -> Vec<TelUri> {
@@ -460,6 +542,10 @@ fn tel_values(s: &str) -> Vec<TelUri> {
             .with_param("n", None)
             .with_fragment(s),
         TelUri::from(TelUriParts::default()).with_param("n", Some(s)),
+        edit(base().with_param(s, None), |t| {
+            t.params_mut()
+                .set(s, Some(s));
+        }),
     ]
 }
 

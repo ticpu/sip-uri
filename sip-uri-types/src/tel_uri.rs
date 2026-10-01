@@ -115,6 +115,11 @@ impl TelUri {
         &self.params
     }
 
+    /// The parameters, to edit in place; every insertion canonizes.
+    pub fn params_mut(&mut self) -> &mut Params {
+        &mut self.params
+    }
+
     /// Look up a parameter by name (case-insensitive): `Some(None)` when it
     /// has no value.
     pub fn param(&self, name: &str) -> Option<Option<&str>> {

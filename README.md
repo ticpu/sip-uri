@@ -39,7 +39,7 @@ sip-uri = "0.3.0-rc.1"
 | `UrnUri` | URN with NID, NSS, and optional r/q/f components |
 | `OtherUri` | Text with an unrecognized scheme, or none, kept with its scheme lowercased and bytes that would break a header line escaped |
 | `SipUriParts`, `TelUriParts`, `UrnUriParts` | Public-field components; `From` canonizes them into the URI, `into_parts()` gives them back |
-| `Params`, `UserParams`, `Headers` | Ordered `(name, value)` pairs, canonized on insertion; `iter()` and case-insensitive `get()` |
+| `Params`, `UserParams`, `Headers` | Ordered `(name, value)` pairs, canonized on insertion; `iter()`, `retain()`, and case-insensitive `get()`, `set()` and `remove()`; `SipUri::params_mut()` and its siblings edit them in place |
 | `Host` | IPv4, IPv6, or `Hostname` (lowercase by construction) |
 | `Scheme` | `Sip` or `Sips` |
 | `ParseError` | `Empty`, `SchemeMismatch`, or `NonConformant` from a strict parse |
