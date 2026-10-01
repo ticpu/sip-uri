@@ -32,7 +32,7 @@ assert_eq!(tel.number(), Some("+1555%3Bx=1"));
 | `SipUri`, `TelUri`, `UrnUri` | URI values with builders and accessors |
 | `SipUriParts`, `TelUriParts`, `UrnUriParts` | Public-field components; `From` canonizes them into the URI, `into_parts()` gives them back |
 | `Params`, `UserParams`, `Headers` | Ordered `(name, value)` pairs, canonized on insertion; `iter()` and case-insensitive `get()` |
-| `OtherUri` | Text with an unrecognized scheme, or none, scheme lowercased; `OtherUri::new(scheme, rest)` |
+| `OtherUri` | Text with an unrecognized scheme, or none, scheme lowercased; `OtherUri::new(scheme, rest)`, refusing with an `OtherUriError` |
 | `Host`, `Hostname`, `Bare` | IPv4, IPv6 or a canonical hostname; `bare()` renders IPv6 without brackets |
 | `UserHost`, `AssignedName` | `Display` adapters from `SipUri::user_host()` (`user@host:port`) and `UrnUri::assigned_name()` (`urn:NID:NSS`) |
 | `Scheme` | `Sip` or `Sips` |

@@ -56,7 +56,7 @@ pub use host::{Bare, Host, Hostname};
 pub use params::{Headers, Pairs, Params, UserParams};
 pub use sip_uri::{Scheme, SipUri, SipUriParts, UserHost};
 pub use tel_uri::{TelUri, TelUriParts};
-pub use uri::{OtherUri, Uri};
+pub use uri::{OtherUri, OtherUriError, Uri};
 pub use urn_uri::{AssignedName, UrnUri, UrnUriParts};
 
 #[cfg(test)]

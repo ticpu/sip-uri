@@ -82,11 +82,13 @@ impl Serialize for OtherUri {
 impl<'de> Deserialize<'de> for OtherUri {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let other = OtherOwned::deserialize(deserializer)?;
-        OtherUri::new(other.scheme.as_deref(), &other.rest).ok_or_else(|| {
-            D::Error::custom(
-                "other URI needs a scheme outside sip, sips, tel and urn in RFC 3986 syntax, or text",
-            )
-        })
+        OtherUri::new(
+            other
+                .scheme
+                .as_deref(),
+            &other.rest,
+        )
+        .map_err(D::Error::custom)
     }
 }
 

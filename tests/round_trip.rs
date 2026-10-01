@@ -1,6 +1,6 @@
 use sip_uri::{
-    Host, Hostname, OtherUri, Params, Scheme, SipUri, SipUriParts, TelUri, TelUriParts, Uri,
-    UriParse, UrnUri, UrnUriParts, UserParams, WarningCode,
+    Host, Hostname, OtherUri, OtherUriError, Params, Scheme, SipUri, SipUriParts, TelUri,
+    TelUriParts, Uri, UriParse, UrnUri, UrnUriParts, UserParams, WarningCode,
 };
 use std::net::{Ipv4Addr, Ipv6Addr};
 
@@ -1152,8 +1152,14 @@ fn other_uri_new_matches_parsed_other() {
     let parsed = Uri::parse("HTTPS://example.com/a").unwrap();
     let built = OtherUri::new(Some("https"), "//example.com/a").unwrap();
     assert_eq!(parsed, Uri::Other(built));
-    assert_eq!(OtherUri::new(Some("tel"), "+15551234567"), None);
-    assert_eq!(OtherUri::new(Some("1x"), "y"), None);
+    assert_eq!(
+        OtherUri::new(Some("tel"), "+15551234567"),
+        Err(OtherUriError::TypedScheme)
+    );
+    assert_eq!(
+        OtherUri::new(Some("1x"), "y"),
+        Err(OtherUriError::InvalidScheme)
+    );
 }
 
 #[test]

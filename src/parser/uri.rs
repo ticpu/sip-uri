@@ -1,7 +1,7 @@
 use crate::error::ParseError;
 use crate::grammar::{self, SchemeSplit};
 use crate::warning::{Component, Parsed, WarningCode, Warnings};
-use sip_uri_types::{OtherUri, Uri};
+use sip_uri_types::{OtherUri, OtherUriError, Uri};
 
 pub(crate) fn parse(s: &str) -> Result<Parsed<Uri>, ParseError> {
     fn wrap<T>(parsed: Parsed<T>, variant: fn(T) -> Uri) -> Parsed<Uri> {
@@ -41,8 +41,12 @@ pub(crate) fn parse(s: &str) -> Result<Parsed<Uri>, ParseError> {
             OtherUri::new(None, s)
         }
     };
-    // `split_scheme` names only known or RFC 3986 schemes, so `None` is a known one.
-    let other = other.ok_or(ParseError::SchemeMismatch)?;
+    // `s` is not empty, and `split_scheme` names only RFC 3986 schemes,
+    // the typed ones dispatched above.
+    let other = other.map_err(|e| match e {
+        OtherUriError::Empty => ParseError::Empty,
+        _ => ParseError::SchemeMismatch,
+    })?;
     Ok(warnings.finish(Uri::Other(other)))
 }
 
@@ -125,7 +129,9 @@ mod tests {
         let uri = Uri::parse("http://example.com").unwrap();
         assert_eq!(
             uri.as_other(),
-            OtherUri::new(Some("http"), "//example.com").as_ref()
+            OtherUri::new(Some("http"), "//example.com")
+                .ok()
+                .as_ref()
         );
         assert_eq!(uri.scheme(), Some("http"));
         assert!(uri

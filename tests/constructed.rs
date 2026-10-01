@@ -506,7 +506,7 @@ fn constructed_values_survive_the_parser() {
             failures.round_trips_as_uri(v);
         }
         match OtherUri::new(Some("x-test"), &s) {
-            Some(other) if !reads_as_port(&s) => failures.round_trips_as_uri(Uri::Other(other)),
+            Ok(other) if !reads_as_port(&s) => failures.round_trips_as_uri(Uri::Other(other)),
             _ => {}
         }
     }
@@ -588,7 +588,7 @@ fn schemeless_sip_uri_fails_only_where_its_text_reads_as_a_scheme() {
 fn schemeless_other_fails_only_where_its_text_reads_as_a_scheme() {
     let mut failures = Vec::new();
     for s in samples() {
-        if let Some(other) = OtherUri::new(None, &s) {
+        if let Ok(other) = OtherUri::new(None, &s) {
             let uri = Uri::Other(other);
             if survives(&uri) == reads_as_scheme(&uri.to_string()) {
                 failures.push(format!("{uri:?}"));

@@ -171,7 +171,7 @@ pub(crate) fn find_userinfo_at(s: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sip_uri_types::OtherUri;
+    use sip_uri_types::{OtherUri, OtherUriError};
 
     fn split_kind(input: &str) -> &'static str {
         match split_scheme(input) {
@@ -188,7 +188,7 @@ mod tests {
                 format!("l:1{}", b as char),
                 format!("example.com:5060{}x", b as char),
             ] {
-                let Some(canonical) = OtherUri::new(None, &raw) else {
+                let Ok(canonical) = OtherUri::new(None, &raw) else {
                     continue;
                 };
                 let canonical = canonical.to_string();
@@ -231,7 +231,7 @@ mod tests {
             .iter()
             .all(|k| k.len() <= 4));
         let mut refused: Vec<String> = short_schemes()
-            .filter(|s| sip_uri_types::OtherUri::new(Some(s), "x").is_none())
+            .filter(|s| OtherUri::new(Some(s), "x") == Err(OtherUriError::TypedScheme))
             .collect();
         refused.sort_unstable();
         let mut known: Vec<String> = KNOWN_SCHEMES

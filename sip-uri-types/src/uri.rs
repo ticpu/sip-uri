@@ -44,25 +44,26 @@ impl OtherUri {
     /// non-ASCII character become uppercase `%XX`; nothing is decoded, and
     /// every other byte, `%` included, is kept as sent.
     ///
-    /// `None` when the scheme is outside the RFC 3986 grammar or is `sip`,
-    /// `sips`, `tel` or `urn`, which have their own types, or when there is
-    /// neither scheme nor text.
+    /// Fails when there is neither scheme nor text, or when the scheme is
+    /// outside the RFC 3986 grammar or has a URI type of its own.
     ///
     /// ```
-    /// use sip_uri_types::OtherUri;
+    /// use sip_uri_types::{OtherUri, OtherUriError};
     ///
     /// let uri = OtherUri::new(Some("HTTPS"), "//example.com/a b").unwrap();
     /// assert_eq!(uri.as_str(), "https://example.com/a%20b");
+    /// assert_eq!(OtherUri::new(Some("sip"), "x"), Err(OtherUriError::TypedScheme));
     /// ```
-    pub fn new(scheme: Option<&str>, rest: &str) -> Option<Self> {
+    pub fn new(scheme: Option<&str>, rest: &str) -> Result<Self, OtherUriError> {
         match scheme {
-            None if rest.is_empty() => None,
-            None => Some(OtherUri {
+            None if rest.is_empty() => Err(OtherUriError::Empty),
+            None => Ok(OtherUri {
                 raw: canon::canonize_other(rest),
                 scheme_end: None,
             }),
-            Some(s) if !canon::is_scheme(s) || canon::is_known_scheme(s) => None,
-            Some(s) => Some(OtherUri {
+            Some(s) if !canon::is_scheme(s) => Err(OtherUriError::InvalidScheme),
+            Some(s) if canon::is_known_scheme(s) => Err(OtherUriError::TypedScheme),
+            Some(s) => Ok(OtherUri {
                 raw: format!("{}:{}", s.to_ascii_lowercase(), canon::canonize_other(rest)),
                 scheme_end: Some(s.len()),
             }),
@@ -88,6 +89,30 @@ impl OtherUri {
         &self.raw[start..]
     }
 }
+
+/// Why [`OtherUri::new`] refused its parts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum OtherUriError {
+    /// Neither a scheme nor text.
+    Empty,
+    /// The scheme is outside the RFC 3986 grammar.
+    InvalidScheme,
+    /// The scheme is `sip`, `sips`, `tel` or `urn`, which have their own type.
+    TypedScheme,
+}
+
+impl fmt::Display for OtherUriError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            OtherUriError::Empty => "other URI has neither scheme nor text",
+            OtherUriError::InvalidScheme => "other URI scheme is outside RFC 3986 syntax",
+            OtherUriError::TypedScheme => "other URI scheme has a URI type of its own",
+        })
+    }
+}
+
+impl std::error::Error for OtherUriError {}
 
 impl fmt::Display for OtherUri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -221,8 +246,18 @@ mod tests {
 
     #[test]
     fn other_uri_refuses_known_and_invalid_schemes() {
-        assert_eq!(OtherUri::new(Some("SIP"), "alice@example.com"), None);
-        assert_eq!(OtherUri::new(Some("<sip"), "alice@example.com"), None);
+        assert_eq!(
+            OtherUri::new(Some("SIP"), "alice@example.com"),
+            Err(OtherUriError::TypedScheme)
+        );
+        assert_eq!(
+            OtherUri::new(Some("<sip"), "alice@example.com"),
+            Err(OtherUriError::InvalidScheme)
+        );
+        assert_eq!(
+            OtherUri::new(Some(""), "x"),
+            Err(OtherUriError::InvalidScheme)
+        );
         let other = OtherUri::new(Some("HTTPS"), "//example.com").unwrap();
         assert_eq!(other.as_str(), "https://example.com");
         assert_eq!(other.scheme(), Some("https"));
@@ -231,7 +266,8 @@ mod tests {
         assert_eq!(bare.as_str(), "*");
         assert_eq!(bare.rest(), "*");
         assert_eq!(other.rest(), "//example.com");
-        assert_eq!(OtherUri::new(None, ""), None);
+        assert_eq!(OtherUri::new(None, ""), Err(OtherUriError::Empty));
+        assert!(OtherUri::new(Some("x-test"), "").is_ok());
     }
 
     #[test]
@@ -241,7 +277,7 @@ mod tests {
             other.as_str(),
             "http://x%0D%0AVia:%20%3Cy%3E%20%22%C3%A9%22%20%zz"
         );
-        assert_eq!(OtherUri::new(Some("http"), other.rest()), Some(other));
+        assert_eq!(OtherUri::new(Some("http"), other.rest()), Ok(other));
         assert_eq!(
             OtherUri::new(None, "a\u{7f}b")
                 .unwrap()
