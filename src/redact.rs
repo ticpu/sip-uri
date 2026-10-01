@@ -1,4 +1,5 @@
 use std::fmt;
+use std::sync::Arc;
 
 use sip_uri_types::Pairs;
 use sip_uri_types::SipUri;
@@ -42,25 +43,56 @@ pub enum HeaderMask {
 /// [`UserMask`]. URN and unrecognized URIs render unmasked, so an
 /// identifier such as an IMEI in a URN NSS is the caller's to keep out of
 /// logs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// A policy owns its data and clones cheaply, so one read from configuration
+/// is built once and lent to every rendering:
+///
+/// ```
+/// use sip_uri::{Redaction, SipUri, UriParse, UriRedact, UserMask};
+///
+/// struct Logger {
+///     redaction: Redaction,
+/// }
+///
+/// impl Logger {
+///     fn new(masked_params: &[String]) -> Self {
+///         let redaction = Redaction::default()
+///             .user(UserMask::KeepLast(4))
+///             .params(masked_params);
+///         Logger { redaction }
+///     }
+///
+///     fn line(&self, uri: &SipUri) -> String {
+///         format!("call from {}", uri.redacted(&self.redaction))
+///     }
+/// }
+///
+/// let logger = Logger::new(&["participantid".to_string()]);
+/// let uri = SipUri::parse("sip:+15551234567@example.com;ParticipantId=7").unwrap();
+/// assert_eq!(
+///     logger.line(&uri),
+///     "call from sip:+xxxxxxx4567@example.com;ParticipantId=***"
+/// );
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct Redaction<'a> {
+pub struct Redaction {
     user: UserMask,
     headers: HeaderMask,
-    params: &'a [&'a str],
+    params: Arc<[String]>,
 }
 
-impl Default for Redaction<'_> {
+impl Default for Redaction {
     fn default() -> Self {
         Redaction {
             user: UserMask::Full,
             headers: HeaderMask::Values,
-            params: &[],
+            params: Arc::from([]),
         }
     }
 }
 
-impl<'a> Redaction<'a> {
+impl Redaction {
     /// Set how the user part or tel: number is rendered.
     pub fn user(mut self, mask: UserMask) -> Self {
         self.user = mask;
@@ -88,9 +120,17 @@ impl<'a> Redaction<'a> {
         self.headers(HeaderMask::Dropped)
     }
 
-    /// Render the values of these params (case-insensitive) as `***`.
-    pub fn params(mut self, names: &'a [&'a str]) -> Self {
-        self.params = names;
+    /// Render the values of params with these names, compared
+    /// case-insensitively, as `***`, in place of any set before.
+    pub fn params<I, S>(mut self, names: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.params = names
+            .into_iter()
+            .map(Into::into)
+            .collect();
         self
     }
 
@@ -105,43 +145,43 @@ impl<'a> Redaction<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct Redacted<'a, T> {
     uri: &'a T,
-    how: Redaction<'a>,
+    how: &'a Redaction,
+}
+
+mod sealed {
+    pub trait Sealed {}
 }
 
 /// Rendering for logs, for [`SipUri`], [`TelUri`] and [`Uri`].
-pub trait UriRedact: Sized {
+pub trait UriRedact: Sized + sealed::Sealed {
     /// Render for logs, masking what `how` names.
     ///
     /// ```
     /// use sip_uri::{Redaction, SipUri, UriParse, UriRedact, UserMask};
     ///
     /// let uri = SipUri::parse("sip:+15551234567;cpc=ordinary:pw@example.com").unwrap();
-    /// assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com");
+    /// assert_eq!(uri.redacted(&Redaction::default()).to_string(), "sip:***@example.com");
     /// assert_eq!(
-    ///     uri.redacted(Redaction::default().user(UserMask::KeepLast(4))).to_string(),
+    ///     uri.redacted(&Redaction::default().user(UserMask::KeepLast(4))).to_string(),
     ///     "sip:+xxxxxxx4567;cpc=ordinary:***@example.com"
     /// );
     /// ```
-    fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Self>;
+    fn redacted<'a>(&'a self, how: &'a Redaction) -> Redacted<'a, Self>;
 }
 
-impl UriRedact for SipUri {
-    fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Self> {
-        Redacted { uri: self, how }
-    }
+macro_rules! impl_uri_redact {
+    ($($ty:ty),*) => {$(
+        impl sealed::Sealed for $ty {}
+
+        impl UriRedact for $ty {
+            fn redacted<'a>(&'a self, how: &'a Redaction) -> Redacted<'a, Self> {
+                Redacted { uri: self, how }
+            }
+        }
+    )*};
 }
 
-impl UriRedact for TelUri {
-    fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Self> {
-        Redacted { uri: self, how }
-    }
-}
-
-impl UriRedact for Uri {
-    fn redacted<'a>(&'a self, how: Redaction<'a>) -> Redacted<'a, Self> {
-        Redacted { uri: self, how }
-    }
-}
+impl_uri_redact!(SipUri, TelUri, Uri);
 
 fn write_masked_user(f: &mut fmt::Formatter<'_>, user: &str, mask: UserMask) -> fmt::Result {
     match mask {
@@ -168,7 +208,7 @@ fn write_masked_user(f: &mut fmt::Formatter<'_>, user: &str, mask: UserMask) -> 
     }
 }
 
-fn write_params(f: &mut fmt::Formatter<'_>, params: Pairs<'_>, how: &Redaction<'_>) -> fmt::Result {
+fn write_params(f: &mut fmt::Formatter<'_>, params: Pairs<'_>, how: &Redaction) -> fmt::Result {
     for (name, value) in params {
         write!(f, ";{name}")?;
         match value {
@@ -182,7 +222,7 @@ fn write_params(f: &mut fmt::Formatter<'_>, params: Pairs<'_>, how: &Redaction<'
 
 impl fmt::Display for Redacted<'_, SipUri> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (uri, how) = (self.uri, &self.how);
+        let (uri, how) = (self.uri, self.how);
         if let Some(scheme) = uri.scheme() {
             write!(f, "{scheme}:")?;
         }
@@ -250,7 +290,7 @@ impl fmt::Display for Redacted<'_, SipUri> {
 
 impl fmt::Display for Redacted<'_, TelUri> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (uri, how) = (self.uri, &self.how);
+        let (uri, how) = (self.uri, self.how);
         f.write_str("tel:")?;
         if let Some(number) = uri.number() {
             write_masked_user(f, number, how.user)?;

@@ -211,12 +211,12 @@ The collections are opaque types instead of slices of tuples, so their storage c
 use sip_uri::{HeaderMask, Redaction, SipUri, UriParse, UriRedact, UserMask};
 
 let uri = SipUri::parse("sip:+15551234567:pw@example.com?Subject=x").unwrap();
-assert_eq!(uri.redacted(Redaction::default()).to_string(), "sip:***@example.com?Subject=***");
+assert_eq!(uri.redacted(&Redaction::default()).to_string(), "sip:***@example.com?Subject=***");
 let keep4 = Redaction::default().user(UserMask::KeepLast(4)).headers(HeaderMask::Visible);
-assert_eq!(uri.redacted(keep4).to_string(), "sip:+xxxxxxx4567:***@example.com?Subject=x");
+assert_eq!(uri.redacted(&keep4).to_string(), "sip:+xxxxxxx4567:***@example.com?Subject=x");
 ```
 
-`redacted()` comes from the `UriRedact` trait, so import it.
+`redacted()` comes from the `UriRedact` trait, so import it. It borrows the `Redaction`, which owns its policy (`params()` takes any iterator of names) and clones cheaply, so a policy read from configuration is built once and stored, for example in a logger struct.
 
 `Debug` of `SipUri`, `SipUriParts` and `Uri` writes a password as `***`; 0.2's derived `Debug` printed it. The user part still prints as it is.
 
