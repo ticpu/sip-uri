@@ -143,7 +143,7 @@ Two consequences:
 - Two spellings of one value compare equal, so `a b` and `a%20b` are the same URI.
 - Display never prints a byte that changes how the URI parses, or that would break a header line. Caller-supplied text can't inject params, headers or a host.
 
-Conformant input is unchanged, including phone numbers with `*`, `#` and `+`. `decode_user` still returns the logical bytes of a user part when you need them.
+Conformant input is unchanged, including phone numbers with `*`, `#` and `+`. `encoding::decode_user` returns the logical bytes of a user part when you need them, and the `encoding` module has an encoder and decoder like it for every component a builder takes.
 
 Builders and parts structs take URI text, not logical values: `with_user("%2B1")` holds `%2B1`, distinct from `+1`. Code that fed a builder already-decoded text keeps working as long as that text holds no `%`.
 

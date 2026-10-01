@@ -1,6 +1,6 @@
 //! Canonical form of each URI component, and the literal sets deciding it.
 
-use std::borrow::Cow;
+pub mod encoding;
 
 /// RFC 3261 §25: `unreserved = alphanum / mark`
 fn is_unreserved(c: u8) -> bool {
@@ -228,10 +228,15 @@ pub(crate) fn canonize_nss(input: &str) -> String {
     canonize(input, never, is_nss_literal)
 }
 
-/// Canonize a URN r-component. A `?` before `=` is escaped, since `?=` would
-/// start the q-component.
+/// Canonize a URN r-component.
 pub(crate) fn canonize_urn_r(input: &str) -> String {
-    canonize(input, never, is_rqf_literal).replace("?=", "%3F=")
+    escape_q_start(canonize(input, never, is_rqf_literal))
+}
+
+/// Escape a `?` before `=` in an r-component, since `?=` would start the
+/// q-component.
+fn escape_q_start(r: String) -> String {
+    r.replace("?=", "%3F=")
 }
 
 /// Canonize a URN q-component.
@@ -257,146 +262,21 @@ fn is_other_literal(c: u8) -> bool {
 
 /// Canonize the text of an unrecognized URI, decoding nothing.
 pub(crate) fn canonize_other(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    for &b in input.as_bytes() {
-        push_octet(&mut out, b, is_other_literal);
+    escape(input.as_bytes(), is_other_literal)
+}
+
+/// Write each octet in `literal` as itself and every other as uppercase `%XX`.
+fn escape(bytes: &[u8], literal: fn(u8) -> bool) -> String {
+    let mut out = String::with_capacity(bytes.len());
+    for &b in bytes {
+        push_octet(&mut out, b, literal);
     }
     out
-}
-
-/// Decode every `%XX` in a SIP user part to its octet.
-///
-/// The input is the encoded `user` production as it appears before `@`,
-/// user-params included: `%2B1555` from FreeSWITCH's `sip_req_user`, or the
-/// canonical form [`crate::SipUri::user`] holds. The result is the logical
-/// value, not a URI component: `%3B` and a literal `;` both come out as `;`,
-/// so a user-params split is lost, and the bytes need not be UTF-8. A `%` not
-/// followed by two hex digits is copied verbatim.
-///
-/// Returns [`Cow::Borrowed`] when the input contains no `%`.
-///
-/// ```
-/// use sip_uri_types::decode_user;
-///
-/// let decoded = decode_user("%2B15551234567");
-/// assert_eq!(String::from_utf8_lossy(&decoded), "+15551234567");
-/// ```
-pub fn decode_user(user: &str) -> Cow<'_, [u8]> {
-    if !user.contains('%') {
-        return Cow::Borrowed(user.as_bytes());
-    }
-    let bytes = user.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        match escape_at(bytes, i) {
-            Some(b) => {
-                out.push(b);
-                i += ESCAPE_LEN;
-            }
-            None => {
-                out.push(bytes[i]);
-                i += 1;
-            }
-        }
-    }
-    Cow::Owned(out)
-}
-
-/// Percent-encode a URI-header name or value into the canonical form
-/// returned by [`crate::SipUri::header`].
-///
-/// Bytes in the RFC 3261 §25 `hnv-unreserved` + `unreserved` set stay
-/// literal; every other byte — including each byte of a multi-byte UTF-8
-/// character — is emitted as `%XX` with uppercase hex. `hname` and `hvalue`
-/// share the character set, so one function covers both.
-///
-/// The input is the *decoded* logical value: `%` is data and becomes `%25`.
-/// Feeding an already-encoded string double-encodes it.
-///
-/// Returns [`Cow::Borrowed`] when no byte needs encoding.
-pub fn encode_uri_header(s: &str) -> Cow<'_, str> {
-    let bytes = s.as_bytes();
-    let Some(first) = bytes
-        .iter()
-        .position(|&b| !is_hnv_literal(b))
-    else {
-        return Cow::Borrowed(s);
-    };
-
-    let mut out = String::with_capacity(bytes.len() + 2 * (bytes.len() - first));
-    out.push_str(&s[..first]);
-    for &b in &bytes[first..] {
-        push_octet(&mut out, b, is_hnv_literal);
-    }
-    Cow::Owned(out)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn encode_uri_header_borrows_when_clean() {
-        assert!(matches!(encode_uri_header(""), Cow::Borrowed("")));
-        assert!(matches!(
-            encode_uri_header("a-zA-Z0-9[]/?:+$"),
-            Cow::Borrowed(_)
-        ));
-    }
-
-    #[test]
-    fn encode_uri_header_escapes_non_hnv() {
-        assert_eq!(
-            encode_uri_header("12345@example.com;to-tag=abc"),
-            "12345%40example.com%3Bto-tag%3Dabc"
-        );
-        assert_eq!(encode_uri_header("%"), "%25");
-        assert_eq!(encode_uri_header("a b"), "a%20b");
-        assert_eq!(encode_uri_header("é"), "%C3%A9");
-    }
-
-    #[test]
-    fn encode_uri_header_matches_canonical_form() {
-        let encoded = encode_uri_header("12345@example.com;to-tag=abc");
-        assert_eq!(
-            canonize_header("", Some(&encoded))
-                .1
-                .as_deref(),
-            Some(encoded.as_ref())
-        );
-    }
-
-    #[test]
-    fn decode_user_borrows_when_clean() {
-        assert!(matches!(decode_user(""), Cow::Borrowed(b"")));
-        assert!(matches!(
-            decode_user("+15551234567;cpc=emergency"),
-            Cow::Borrowed(_)
-        ));
-    }
-
-    #[test]
-    fn decode_user_decodes_every_escape() {
-        assert_eq!(decode_user("%2B1555").as_ref(), b"+1555");
-        assert_eq!(decode_user("%22foo%22").as_ref(), b"\"foo\"");
-        assert_eq!(decode_user("a%3Bb").as_ref(), b"a;b");
-        assert_eq!(decode_user("%2b%3b").as_ref(), b"+;");
-        assert_eq!(decode_user("%FF").as_ref(), b"\xFF");
-    }
-
-    #[test]
-    fn decode_user_keeps_malformed_percent() {
-        assert_eq!(decode_user("100%").as_ref(), b"100%");
-        assert_eq!(decode_user("a%2").as_ref(), b"a%2");
-        assert_eq!(decode_user("%zz").as_ref(), b"%zz");
-    }
-
-    #[test]
-    fn decode_user_matches_decoding_canonical_form() {
-        let raw = "%2b%22foo%22%3bcpc%3Demergency";
-        assert_eq!(decode_user(raw), decode_user(&canonize_user(raw)));
-    }
 
     #[test]
     fn canonizers_are_idempotent() {

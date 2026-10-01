@@ -208,19 +208,23 @@ Every component holds one canonical form, whether parsed or built:
   an IPv4 address is held as `Host::IPv4`
 - Builders and parts structs take URI text, so `with_user("%2B1")` holds
   `%2B1`, not `+1`
-- `decode_user` fully decodes a bare user part (every `%XX`, bytes out) for
-  callers holding the logical value rather than the canonical form, e.g.
+- `sip_uri::encoding` has one encoder and one decoder per component, for
+  callers holding the logical value rather than the canonical form:
+  `encode_header` turns bytes into text `with_header` holds unchanged, and
+  `decode_user` fully decodes a user part (every `%XX`, bytes out), e.g.
   FreeSWITCH's `sip_req_user`
 
 ```rust
-use sip_uri::{decode_user, SipUri, UriParse};
+use sip_uri::encoding::{decode_user, encode_user};
+use sip_uri::{SipUri, UriParse};
 
 // Percent-encoded quotes in user-part are preserved
 let uri = SipUri::parse(r#"sip:%22foo%22@example.com"#).unwrap();
 assert_eq!(uri.user(), Some(r#"%22foo%22"#));
 
-// Full decode of a bare user part
+// Full decode of a user part, and back
 assert_eq!(decode_user("%2B15551234567").as_ref(), b"+15551234567");
+assert_eq!(encode_user(r#""foo""#), "%22foo%22");
 ```
 
 ## Warnings

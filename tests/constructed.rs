@@ -1,8 +1,9 @@
 use std::fmt::Debug;
 
+use sip_uri::encoding::decode_user;
 use sip_uri::{
-    decode_user, Host, Hostname, OtherUri, SipUri, SipUriParts, TelUri, TelUriParts, Uri, UriParse,
-    UrnUri, UrnUriParts, UserParams,
+    Host, Hostname, OtherUri, SipUri, SipUriParts, TelUri, TelUriParts, Uri, UriParse, UrnUri,
+    UrnUriParts, UserParams,
 };
 
 fn host() -> Host {

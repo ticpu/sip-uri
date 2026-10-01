@@ -993,15 +993,17 @@ fn literal_and_escaped_header_octets_compare_equal() {
     assert_eq!(literal, escaped);
     assert_eq!(
         literal.header("From"),
-        Some(Some(sip_uri::encode_uri_header("a@example.org").as_ref()))
+        Some(Some(
+            sip_uri::encoding::encode_header("a@example.org").as_str()
+        ))
     );
 }
 
 #[test]
-fn encode_uri_header_round_trips_through_parse() {
-    let replaces = sip_uri::encode_uri_header("12345@example.com;to-tag=abc;from-tag=def");
+fn encode_header_round_trips_through_parse() {
+    let replaces = sip_uri::encoding::encode_header("12345@example.com;to-tag=abc;from-tag=def");
     let uri = SipUri::parse(&format!("sip:alice@example.com?Replaces={replaces}")).unwrap();
-    assert_eq!(uri.header("Replaces"), Some(Some(replaces.as_ref())));
+    assert_eq!(uri.header("Replaces"), Some(Some(replaces.as_str())));
 }
 
 #[test]

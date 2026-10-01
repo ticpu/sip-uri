@@ -25,7 +25,7 @@
 //!
 //! Each component keeps its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase `%XX`, whichever path built the value. An escaped reserved character stays escaped, so `%2B1` and `+1` are distinct users.
 //!
-//! Builders and parts structs take URI text, not logical values: a well-formed `%XX` in it is read as an escape, never re-encoded. `with_user("%2B1")` holds `%2B1`; [`decode_user`] gives the logical bytes.
+//! Builders and parts structs take URI text, not logical values: a well-formed `%XX` in it is read as an escape, never re-encoded. `with_user("%2B1")` holds `%2B1`. [`encoding`] has one encoder and one decoder per component, between logical bytes and that text.
 //!
 //! Hostnames are lowercased as ASCII only, with no IDNA and no non-ASCII case folding. An IPv6 address renders as [`std::net::Ipv6Addr`] displays it, and an IPv6 zone ID is not representable.
 //!
@@ -51,7 +51,7 @@ mod tel_uri;
 mod uri;
 mod urn_uri;
 
-pub use canon::{decode_user, encode_uri_header};
+pub use canon::encoding;
 pub use host::{Bare, Host, Hostname};
 pub use params::{Headers, Pairs, Params, UserParams};
 pub use sip_uri::{Scheme, SipUri, SipUriParts, UserHost};
