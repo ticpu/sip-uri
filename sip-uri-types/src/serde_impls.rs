@@ -28,19 +28,19 @@ pair_list_serde!(Params, UserParams, Headers);
 /// The serialized shape of [`Host`], read before [`Host::from_hostname`].
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum HostRepr {
+enum HostRepr {
     IPv4(Ipv4Addr),
     IPv6(Ipv6Addr),
     Hostname(Hostname),
 }
 
-impl From<HostRepr> for Host {
-    fn from(repr: HostRepr) -> Self {
-        match repr {
+impl<'de> Deserialize<'de> for Host {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match HostRepr::deserialize(deserializer)? {
             HostRepr::IPv4(addr) => Host::IPv4(addr),
             HostRepr::IPv6(addr) => Host::IPv6(addr),
             HostRepr::Hostname(name) => Host::from_hostname(name),
-        }
+        })
     }
 }
 

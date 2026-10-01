@@ -11,8 +11,8 @@ use crate::canon;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(rename_all = "lowercase", from = "crate::serde_impls::HostRepr")
+    derive(serde::Serialize),
+    serde(rename_all = "lowercase")
 )]
 #[non_exhaustive]
 pub enum Host {
