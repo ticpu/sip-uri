@@ -309,7 +309,7 @@ Adapters exist for `uri`, `sip_uri`, `tel_uri`, `urn_uri` and `host`, each with 
   algorithm for correct handling of reserved characters in user-parts.
 - **Case-insensitive where required** — scheme and parameter name lookup are
   case-insensitive per RFC. Host names are lowercased.
-- **`#[non_exhaustive]`** — on every public enum and public-field struct.
+- **`#[non_exhaustive]`** — on every public enum and public-field struct but `Uri` and `Scheme`, whose variants are fixed for 1.x, so a `match` on them needs no wildcard arm.
 - **Fragment support** — `SipUri` and `TelUri` parse and round-trip `#fragment`
   components (accepted permissively, matching sofia-sip behavior).
 - **Any-scheme fallback** — `Uri::Other` keeps URIs with unrecognized schemes

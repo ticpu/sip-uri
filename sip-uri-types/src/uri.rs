@@ -17,7 +17,6 @@ use crate::urn_uri::UrnUri;
     derive(serde::Serialize, serde::Deserialize),
     serde(rename_all = "lowercase")
 )]
-#[non_exhaustive]
 pub enum Uri {
     /// SIP or SIPS URI.
     Sip(SipUri),

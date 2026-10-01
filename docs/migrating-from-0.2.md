@@ -245,4 +245,5 @@ sip-uri parses URIs only (`addr-spec`). `"Alice" <sip:alice@example.com>;tag=abc
 
 ## Also new
 
+- `Uri` and `Scheme` are exhaustive; 0.2 marked them `#[non_exhaustive]`. A `match` naming every variant needs no `_` arm, and one that has it gets an unreachable-pattern warning. The set is fixed for 1.x: any other scheme is `Uri::Other`.
 - `SipUri`, `TelUri`, `UrnUri` and `Uri` implement `Hash`, consistent with `Eq`. Both compare the canonical form component by component, never RFC 3261 §19.1.4 equivalence: param order, param and header name case, tel: visual separators and a hostname's trailing dot all count.

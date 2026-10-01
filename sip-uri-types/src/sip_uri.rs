@@ -161,7 +161,6 @@ fn hold_fragment(fragment: &str) -> Option<String> {
     derive(serde::Serialize, serde::Deserialize),
     serde(rename_all = "lowercase")
 )]
-#[non_exhaustive]
 pub enum Scheme {
     /// `sip:` (default port 5060)
     Sip,

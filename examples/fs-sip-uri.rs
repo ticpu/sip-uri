@@ -170,7 +170,7 @@ fn uri_type(uri: &Uri) -> &'static str {
         Uri::Sip(_) => "sip",
         Uri::Tel(_) => "tel",
         Uri::Urn(_) => "urn",
-        _ => "other",
+        Uri::Other(_) => "other",
     }
 }
 
@@ -190,7 +190,7 @@ fn get(uri: &Uri, field: &str) -> Result<Option<String>, String> {
             "param" => Ok(match uri {
                 Uri::Sip(u) => param_value(u.param(name)),
                 Uri::Tel(u) => param_value(u.param(name)),
-                _ => None,
+                Uri::Urn(_) | Uri::Other(_) => None,
             }),
             "uparam" => Ok(uri
                 .as_sip()
@@ -307,7 +307,7 @@ fn vars(uri: &Uri) -> Vec<(String, String)> {
                 push("nss".into(), nss.into());
             }
         }
-        _ => {}
+        Uri::Other(_) => {}
     }
 
     out

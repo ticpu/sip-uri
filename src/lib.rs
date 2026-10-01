@@ -32,7 +32,6 @@
 //!     Uri::Tel(tel) => println!("Tel: {tel}"),
 //!     Uri::Urn(urn) => println!("URN: {urn}"),
 //!     Uri::Other(raw) => println!("other: {raw}"),
-//!     _ => {}
 //! }
 //! ```
 

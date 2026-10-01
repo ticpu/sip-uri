@@ -245,7 +245,8 @@ impl fmt::Display for Redacted<'_, Uri> {
         match self.uri {
             Uri::Sip(u) => write!(f, "{}", u.redacted(self.how)),
             Uri::Tel(u) => write!(f, "{}", u.redacted(self.how)),
-            other => write!(f, "{other}"),
+            Uri::Urn(u) => write!(f, "{u}"),
+            Uri::Other(o) => write!(f, "{o}"),
         }
     }
 }
