@@ -37,6 +37,7 @@
 
 #![forbid(unsafe_code)]
 
+mod equivalence;
 mod error;
 mod grammar;
 mod parser;
@@ -45,6 +46,7 @@ mod redact;
 pub mod serde_str;
 mod warning;
 
+pub use equivalence::UriEquivalence;
 pub use error::ParseError;
 pub use parser::UriParse;
 pub use redact::{HeaderMask, Redacted, Redaction, UriRedact, UserMask};

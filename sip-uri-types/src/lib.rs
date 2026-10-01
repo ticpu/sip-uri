@@ -31,7 +31,7 @@
 //!
 //! # Equality
 //!
-//! `Eq` and `Hash` compare the canonical form component by component. That is identity, never RFC 3261 §19.1.4 or RFC 8141 equivalence: param order, param and header name case, a tel: number's visual separators, a hostname's trailing dot and a URN's r-, q- and f-components all count.
+//! `Eq` and `Hash` compare the canonical form component by component. That is identity, never RFC 3261 §19.1.4 or RFC 8141 equivalence: param order, param and header name case, a tel: number's visual separators, a hostname's trailing dot and a URN's r-, q- and f-components all count. RFC equivalence is sip-uri's [`UriEquivalence`](https://docs.rs/sip-uri/latest/sip_uri/trait.UriEquivalence.html).
 //!
 //! # Stability
 //!

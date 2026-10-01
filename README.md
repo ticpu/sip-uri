@@ -45,6 +45,7 @@ sip-uri = "0.3.0-rc.1"
 | `ParseError` | `Empty`, `SchemeMismatch`, or `NonConformant` from a strict parse |
 | `Parsed` / `ParseWarning` | Value plus the grammar breaches the parser accepted |
 | `Redaction` | What `UriRedact::redacted()` masks when a URI is rendered for logs |
+| `UriEquivalence` | RFC 3261, RFC 3966 and RFC 8141 URI equivalence, apart from `Eq` |
 
 The URI and host types implement `UriParse`, `Display`, `Debug`, `Clone`, `PartialEq`, `Eq` and `Hash`.
 Parsing is a trait, not `FromStr`, so bring `sip_uri::UriParse` into scope.
@@ -52,7 +53,8 @@ Schemes and hosts are case-insensitive and stored lowercase; parameter and
 header lookup is case-insensitive. `Eq` and `Hash` are canonical-structural
 identity, never RFC 3261 §19.1.4 URI equivalence: parameter order, parameter
 and header name case, tel: visual separators and a hostname's trailing dot all
-count. `Display` emits the canonical form, so a value re-parses from its
+count. RFC equivalence is `UriEquivalence::equivalent`, after RFC 3261 §19.1.4,
+RFC 3966 §4 and RFC 8141 §3. `Display` emits the canonical form, so a value re-parses from its
 `Display` as itself, while `display(parse(x))` need not equal `x`. The
 exceptions re-parse as another reading or none:
 
