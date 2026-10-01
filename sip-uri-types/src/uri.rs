@@ -228,6 +228,36 @@ impl From<UrnUri> for Uri {
     }
 }
 
+impl From<OtherUri> for Uri {
+    fn from(o: OtherUri) -> Self {
+        Uri::Other(o)
+    }
+}
+
+/// `Uri` into a variant's type, the `Uri` handed back when it is another.
+macro_rules! try_from_uri {
+    ($($variant:ident => $ty:ty),*) => {$(
+        impl TryFrom<Uri> for $ty {
+            type Error = Uri;
+
+            fn try_from(uri: Uri) -> Result<Self, Uri> {
+                match uri {
+                    Uri::$variant(u) => Ok(u),
+                    other => Err(other),
+                }
+            }
+        }
+    )*};
+}
+
+try_from_uri!(Sip => SipUri, Tel => TelUri, Urn => UrnUri);
+
+impl AsRef<str> for OtherUri {
+    fn as_ref(&self) -> &str {
+        &self.raw
+    }
+}
+
 impl fmt::Display for Uri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -267,6 +297,45 @@ mod tests {
         assert_eq!(other.rest(), "//example.com");
         assert_eq!(OtherUri::new(None, ""), Err(OtherUriError::Empty));
         assert!(OtherUri::new(Some("x-test"), "").is_ok());
+    }
+
+    #[test]
+    fn variants_convert_both_ways() {
+        let host = || crate::Host::Hostname("example.com".into());
+        let uris = [
+            Uri::from(SipUri::new(host())),
+            Uri::from(TelUri::new("+15551234567")),
+            Uri::from(UrnUri::new("service", "sos")),
+            Uri::from(OtherUri::new(Some("https"), "//example.com").unwrap()),
+        ];
+        for uri in uris {
+            let sip = SipUri::try_from(uri.clone()).map(Uri::from);
+            let tel = TelUri::try_from(uri.clone()).map(Uri::from);
+            let urn = UrnUri::try_from(uri.clone()).map(Uri::from);
+            let results = [sip, tel, urn];
+            for result in &results {
+                assert_eq!(
+                    result
+                        .as_ref()
+                        .unwrap_or_else(|e| e),
+                    &uri
+                );
+            }
+            let matched = results
+                .iter()
+                .filter(|r| r.is_ok())
+                .count();
+            assert_eq!(
+                matched,
+                usize::from(
+                    uri.as_other()
+                        .is_none()
+                ),
+                "{uri}"
+            );
+        }
+        let other = OtherUri::new(None, "*").unwrap();
+        assert_eq!(AsRef::<str>::as_ref(&other), other.as_str());
     }
 
     #[test]

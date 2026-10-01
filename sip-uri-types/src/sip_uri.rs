@@ -179,6 +179,15 @@ impl Scheme {
             Scheme::Sips => "sips",
         }
     }
+
+    /// The port a URI without one implies, per RFC 3261 §19.1.1: 5060 for
+    /// `sip`, 5061 for `sips`. A `sip` URI reached over TLS defaults to 5061.
+    pub fn default_port(self) -> u16 {
+        match self {
+            Scheme::Sip => 5060,
+            Scheme::Sips => 5061,
+        }
+    }
 }
 
 impl fmt::Display for Scheme {

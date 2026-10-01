@@ -4,28 +4,21 @@ use crate::warning::{Component, Parsed, WarningCode, Warnings};
 use sip_uri_types::{OtherUri, OtherUriError, Uri};
 
 pub(crate) fn parse(s: &str) -> Result<Parsed<Uri>, ParseError> {
-    fn wrap<T>(parsed: Parsed<T>, variant: fn(T) -> Uri) -> Parsed<Uri> {
-        Parsed {
-            value: variant(parsed.value),
-            warnings: parsed.warnings,
-        }
-    }
-
     if s.is_empty() {
         return Err(ParseError::Empty);
     }
     let mut warnings = Warnings::new(s);
     let other = match grammar::split_scheme(s) {
         SchemeSplit::Named(scheme, _) if scheme.eq_ignore_ascii_case("tel") => {
-            return Ok(wrap(super::tel::parse(s)?, Uri::Tel));
+            return Ok(super::tel::parse(s)?.map(Uri::Tel));
         }
         SchemeSplit::Named(scheme, _)
             if scheme.eq_ignore_ascii_case("sip") || scheme.eq_ignore_ascii_case("sips") =>
         {
-            return Ok(wrap(super::sip::parse(s)?, Uri::Sip));
+            return Ok(super::sip::parse(s)?.map(Uri::Sip));
         }
         SchemeSplit::Named(scheme, _) if scheme.eq_ignore_ascii_case("urn") => {
-            return Ok(wrap(super::urn::parse(s)?, Uri::Urn));
+            return Ok(super::urn::parse(s)?.map(Uri::Urn));
         }
         SchemeSplit::Named(scheme, rest) => OtherUri::new(Some(scheme), rest),
         SchemeSplit::Invalid => {

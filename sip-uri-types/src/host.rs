@@ -1,5 +1,5 @@
 use std::fmt;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use crate::canon;
 
@@ -132,6 +132,42 @@ impl Host {
     pub fn bare(&self) -> Bare<'_> {
         Bare(self)
     }
+
+    /// The address of an IPv4 or IPv6 host, `None` for a hostname.
+    pub fn ip(&self) -> Option<IpAddr> {
+        match self {
+            Host::IPv4(addr) => Some(IpAddr::V4(*addr)),
+            Host::IPv6(addr) => Some(IpAddr::V6(*addr)),
+            Host::Hostname(_) => None,
+        }
+    }
+}
+
+impl From<Ipv4Addr> for Host {
+    fn from(addr: Ipv4Addr) -> Self {
+        Host::IPv4(addr)
+    }
+}
+
+impl From<Ipv6Addr> for Host {
+    fn from(addr: Ipv6Addr) -> Self {
+        Host::IPv6(addr)
+    }
+}
+
+impl From<IpAddr> for Host {
+    fn from(addr: IpAddr) -> Self {
+        match addr {
+            IpAddr::V4(v4) => Host::IPv4(v4),
+            IpAddr::V6(v6) => Host::IPv6(v6),
+        }
+    }
+}
+
+impl AsRef<str> for Hostname {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
 }
 
 /// [`fmt::Display`] wrapper that renders IPv6 without brackets.
@@ -168,5 +204,19 @@ mod tests {
     fn display_ipv6_has_brackets() {
         let host = Host::IPv6(Ipv6Addr::LOCALHOST);
         assert_eq!(host.to_string(), "[::1]");
+    }
+
+    #[test]
+    fn ip_addresses_convert_both_ways() {
+        let v4 = Ipv4Addr::new(198, 51, 100, 1);
+        let v6 = Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1);
+        for addr in [IpAddr::V4(v4), IpAddr::V6(v6)] {
+            assert_eq!(Host::from(addr).ip(), Some(addr));
+        }
+        assert_eq!(Host::from(v4), Host::IPv4(v4));
+        assert_eq!(Host::from(v6), Host::IPv6(v6));
+        assert_eq!(Host::Hostname("example.com".into()).ip(), None);
+        let name = Hostname::from("EXAMPLE.com");
+        assert_eq!(AsRef::<str>::as_ref(&name), name.as_str());
     }
 }

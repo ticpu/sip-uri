@@ -23,6 +23,23 @@ impl<T> Parsed<T> {
             .warnings
             .is_empty()
     }
+
+    /// Apply `f` to the value, keeping the warnings.
+    ///
+    /// ```
+    /// use sip_uri::{SipUri, Uri, UriParse};
+    ///
+    /// let parsed = SipUri::parse_with_warnings("sip:example.com:+5060").unwrap();
+    /// let as_uri = parsed.map(Uri::Sip);
+    /// assert!(as_uri.value.as_sip().is_some());
+    /// assert!(as_uri.has_warnings());
+    /// ```
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Parsed<U> {
+        Parsed {
+            value: f(self.value),
+            warnings: self.warnings,
+        }
+    }
 }
 
 /// A grammar breach the parser accepted rather than rejected.
