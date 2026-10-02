@@ -1,8 +1,8 @@
 # Design Rationale
 
-## Non-compliance warns; only empty input or another type's scheme is an error
+## Non-compliance warns; only nothing to read or another type's scheme is an error
 
-Whatever an input breaks in the grammar, the parser returns what it could read and reports each breach as a typed warning beside the value. `Err` means only that there is nothing to read, or that a present scheme names a different kind of URI; `Uri` answers the latter with `Other`. A server handling a call often cannot refuse it over a malformed caller URI, yet the sender only gets fixed through a report naming the breach, so rejecting loses the call and silent acceptance loses the report.
+Whatever an input breaks in the grammar, the parser returns what it could read and reports each breach as a typed warning beside the value. `Err` means only that there is nothing to read, which for a standalone host includes text holding no readable host, or that a present scheme names a different kind of URI; `Uri` answers the latter with `Other`. A server handling a call often cannot refuse it over a malformed caller URI, yet the sender only gets fixed through a report naming the breach, so rejecting loses the call and silent acceptance loses the report.
 
 `UriParse::parse_with_warnings` is the base; `parse` discards the warnings, and `parse_strict` turns the first one into the error. All three run one path, so a check exists once, as a warning code, and tightening one never narrows what the lenient parsers accept.
 
@@ -22,7 +22,7 @@ Input without a scheme is kept as `Other` with a warning, even when it looks lik
 
 ## Text outside the URI grammar is kept, never stripped
 
-The parser never trims whitespace or removes brackets: text it cannot place stays, escaped, in the component it falls in, with a warning, and stripping what a header wrapped around the URI is the caller's job. When the scheme cannot be read, everything up to `@` is the user part and its `:` starts no password, so a number behind a malformed prefix lands where a reader looks for it.
+The parser never trims whitespace or removes brackets: text it cannot place stays, escaped, in the component it falls in, with a warning, and stripping what a header wrapped around the URI is the caller's job. Only text after the host or port that starts no component is dropped, and its warning says so. When the scheme cannot be read, everything up to `@` is the user part and its `:` starts no password, so a number behind a malformed prefix lands where a reader looks for it.
 
 ## An unrecognized scheme is kept, lowercased
 
@@ -46,7 +46,7 @@ Real SIP traffic and the sofia-sip torture corpus put both unescaped in URI para
 
 ## Every component holds one canonical form; a user part keeps a literal `#`
 
-Each component keeps its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase escape, whether the value was parsed or built. An escaped reserved character stays escaped: RFC 3261 counts it distinct from the literal, and decoding it can change how the value parses. Two spellings of one value therefore compare equal, and no value prints a byte that changes the parse or breaks a header line. A hostname that reads as an IPv4 address is held as one. A user part also keeps a literal `#`, which phones send unescaped and dialplans compare as it stands, while `%23` stays a distinct value. The warning reports the breach; the escape only fixes how the value holds it.
+Each component keeps its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase escape, whether the value was parsed or built. A tel: number, a fragment and a URN component decode no escape at all, since their grammars give an escape no meaning to normalize. An escaped reserved character stays escaped: RFC 3261 counts it distinct from the literal, and decoding it can change how the value parses. Two spellings of one value therefore compare equal, and no value prints a byte that changes the parse or breaks a header line. A URI holds a hostname that reads as an IPv4 address as one. A user part also keeps a literal `#`, which phones send unescaped and dialplans compare as it stands, while `%23` stays a distinct value. The warning reports the breach; the escape only fixes how the value holds it.
 
 ## One canonizing constructor per component; the parser only splits and warns
 

@@ -19,7 +19,7 @@ The pre-commit hook runs gitleaks on staged content and refuses to commit withou
 
 ## New RFC checks warn, never reject
 
-A grammar check added to a parser pushes a `ParseWarning`; it never turns accepted input into an `Err`. The only errors are empty input and a scheme belonging to another type.
+A grammar check added to a parser pushes a `ParseWarning`; it never turns accepted input into an `Err`. The only errors are empty input, a scheme belonging to another type, and a standalone host with nothing readable.
 
 ## Every component goes through its canonizer
 
