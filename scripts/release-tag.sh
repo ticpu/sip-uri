@@ -121,8 +121,13 @@ for crate in "${CRATES[@]}"; do
 	fi
 done
 
-git add Cargo.toml sip-uri-types/Cargo.toml
-git commit -m "release: $SUBJECT"
+# Re-tagging a version the manifests already carry has nothing to commit.
+if git diff --quiet -- Cargo.toml sip-uri-types/Cargo.toml; then
+	echo "Manifests already at the requested versions; no release commit."
+else
+	git add Cargo.toml sip-uri-types/Cargo.toml
+	git commit -m "release: $SUBJECT"
+fi
 
 git checkout --detach
 if git symbolic-ref -q HEAD >/dev/null; then
