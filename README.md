@@ -6,7 +6,7 @@ Implements RFC 3261 (SIP-URI, SIPS-URI), RFC 3966 (tel-URI), and
 RFC 8141 (URN) with hand-written parsing and per-component
 percent-encoding.
 
-The value types live in [sip-uri-types](https://crates.io/crates/sip-uri-types), which this crate parses into and re-exports. A crate exposing a URI in its public API names `sip_uri_types`, which aims at a stable 1.x, so it does not break when parse policy here moves on a minor release.
+The value types live in [sip-uri-types](https://crates.io/crates/sip-uri-types), which this crate parses into and re-exports. Crates that exchange URIs name `sip_uri_types` in their public APIs; it changes only when a value's identity does, so the surface they share stays small while parse policy here moves freely.
 
 ```rust
 use sip_uri::{SipUri, UriParse};
@@ -309,7 +309,7 @@ Adapters exist for `uri`, `sip_uri`, `tel_uri`, `urn_uri` and `host`, each with 
   algorithm for correct handling of reserved characters in user-parts.
 - **Case-insensitive where required** — scheme and parameter name lookup are
   case-insensitive per RFC. Host names are lowercased.
-- **`#[non_exhaustive]`** — on every public enum and public-field struct but `Uri` and `Scheme`, whose variants are fixed for 1.x, so a `match` on them needs no wildcard arm.
+- **`#[non_exhaustive]`** — on every public enum and public-field struct but `Uri` and `Scheme`, whose variant set is fixed, so a `match` on them needs no wildcard arm.
 - **Fragment support** — `SipUri` and `TelUri` parse and round-trip `#fragment`
   components (accepted permissively, matching sofia-sip behavior).
 - **Any-scheme fallback** — `Uri::Other` keeps URIs with unrecognized schemes

@@ -8,9 +8,9 @@ Whatever an input breaks in the grammar, the parser returns what it could read a
 
 ## URI values live in sip-uri-types; parsing lives in sip-uri
 
-A value's identity, meaning its components, canonical form, equality and Display, belongs to sip-uri-types, which downstream crates name in their public APIs. Parsing, warnings, strict mode and redaction belong to sip-uri. Parse policy moves on every minor, and a crate that exposes a URI must not break when it does. The orphan rule leaves the data types without `FromStr`, so parsing is spelled through sip-uri's extension trait.
+A value's identity, meaning its components, canonical form, equality and Display, belongs to sip-uri-types, which downstream crates name in their public APIs. Parsing, warnings, strict mode and redaction belong to sip-uri. Crates exchange URIs through these types, so the surface they share must move as little as possible: the types change only when a value's identity does, while parse policy changes freely without reaching them. The orphan rule leaves the data types without `FromStr`, so parsing is spelled through sip-uri's extension trait.
 
-Params and headers are opaque collections, so their storage can change within 1.x; the serde shape is under the same contract as the fields. The set of URI kinds with their own type is fixed for 1.x, since a new one would turn stored `Other` values into another variant; `Uri` and `Scheme` are therefore exhaustive, and `Other` is the arm for every other scheme.
+Params and headers are opaque collections, so their storage can change without reaching callers; the serde shape is under the same contract as the fields. The set of URI kinds with their own type is fixed, since a new one would turn stored `Other` values into another variant; `Uri` and `Scheme` are therefore exhaustive, and `Other` is the arm for every other scheme.
 
 ## A spec-required component holds absence, and a warning reports it
 
@@ -54,7 +54,7 @@ Builders, parts constructors and deserialization reach each component through th
 
 ## Grammar predicates are private to each crate, tied by a test
 
-The parser's grammar classes decide warnings, and sip-uri-types' literal sets decide canonical form. Neither crate exports its predicates, so parse policy can widen or narrow what it reports without reaching the 1.0 surface. The one coupling, that conformant text is never re-encoded, is asserted by a byte sweep through the public constructors.
+The parser's grammar classes decide warnings, and sip-uri-types' literal sets decide canonical form. Neither crate exports its predicates, so parse policy can widen or narrow what it reports without reaching the data types. The one coupling, that conformant text is never re-encoded, is asserted by a byte sweep through the public constructors.
 
 sip-uri-types does export one encoder and one decoder per component, because a crate holding a logical value needs the URI text a builder takes, and the reverse. They work on bytes, not text: an encoder escapes every byte its component does not keep literal and cannot fail, and a decoder returns bytes, since an escape may stand for part of a UTF-8 sequence or for none. A builder holds an encoder's output unchanged, so encoding, building and decoding returns the logical bytes. Hostnames and namespace identifiers have no pair, since lowercasing makes their bytes unrecoverable.
 
@@ -68,7 +68,7 @@ Display carries the user part and password, so logs use the redacted rendering, 
 
 ## Equality is canonical-structural identity, never RFC equivalence
 
-`Eq` and `Hash` compare the canonical form component by component, so param order, param and header name case, and a tel: number's visual separators all count. RFC equivalence rests on defaults and per-param rules that a 1.x could not revisit without changing the identity of every stored value, so it is a separate function in sip-uri, and the canonical form never reorders, lowercases or strips to approximate it.
+`Eq` and `Hash` compare the canonical form component by component, so param order, param and header name case, and a tel: number's visual separators all count. RFC equivalence rests on defaults and per-param rules that could not be revisited without changing the identity of every stored value, so it is a separate function in sip-uri, and the canonical form never reorders, lowercases or strips to approximate it.
 
 Where the RFCs leave the comparison open, equivalence errs toward not equivalent: header values and fragments compare exactly, a param named more than once compares by its first value, and `transport` joins the params that must match whenever either side has one, as RFC 3261's own non-equivalence example requires.
 

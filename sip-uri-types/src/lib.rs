@@ -35,7 +35,7 @@
 //!
 //! # Stability
 //!
-//! The URI kinds with their own type are fixed for 1.x: a URI with any other scheme is [`Uri::Other`]. [`Uri`] and [`Scheme`] are therefore exhaustive.
+//! The URI kinds with their own type are fixed: a URI with any other scheme is [`Uri::Other`]. [`Uri`] and [`Scheme`] are therefore exhaustive.
 //!
 //! The minimum supported Rust version is 1.70, 1.71 with the `serde` feature. Raising it is a minor release.
 

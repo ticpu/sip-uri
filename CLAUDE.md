@@ -1,6 +1,6 @@
 ## Project Type
 
-SIP/tel/URN URI library: RFC 3261 (SIP/SIPS), RFC 3966 (tel:), RFC 8141 (URN). Workspace of two crates: `sip-uri-types` holds the value types (aiming 1.0, breaks only on identity), `sip-uri` holds parsing, warnings and redaction. Decisions and their reasons live in `docs/design-rationale.md`.
+SIP/tel/URN URI library: RFC 3261 (SIP/SIPS), RFC 3966 (tel:), RFC 8141 (URN). Workspace of two crates: `sip-uri-types` holds the value types (the surface crates exchange URIs through, changing only on identity), `sip-uri` holds parsing, warnings and redaction. Decisions and their reasons live in `docs/design-rationale.md`.
 
 The pre-commit hook runs across `--workspace --all-features`; it is the verification gate.
 
@@ -27,7 +27,7 @@ Parser, builders, parts constructors and serde reach a component only through th
 
 ## `#[non_exhaustive]` on every public enum and public-field struct
 
-Single-field error newtypes are exempt, and so are `Uri` and `Scheme`, whose variants the rationale fixes for 1.x.
+Single-field error newtypes are exempt, and so are `Uri` and `Scheme`, whose variant set the rationale fixes.
 
 ## No `assert!` / `unwrap()` in library code
 

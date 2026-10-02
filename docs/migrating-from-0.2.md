@@ -4,7 +4,7 @@ sip-uri 0.3 changes three things about the crate:
 
 - Parsing rarely fails. A non-conformant URI parses, and each breach of the grammar comes back as a typed warning.
 - Every URI component has one canonical form, whether the value was parsed or built.
-- The value types moved to their own crate, sip-uri-types, which aims at 1.x.
+- The value types moved to their own crate, sip-uri-types, which changes only when a value's identity does.
 
 Most of the API changes on this page follow from one of those three.
 
@@ -17,7 +17,7 @@ Which to depend on:
 - An application that parses URIs depends on `sip-uri`.
 - A library that only holds or passes URIs, and names them in its public API, depends on `sip-uri-types`.
 
-sip-uri-types changes only when a value's identity changes: its components, its canonical form, equality, or Display. sip-uri's parse policy moves on every minor release, and a library that exposes `sip_uri_types::Uri` does not break when it does. Before 0.3, every sip-uri minor was also a breaking release for every crate that exposed a URI.
+sip-uri-types changes only when a value's identity changes: its components, its canonical form, equality, or Display. Crates that exchange URIs share only that small, slow-moving surface, so sip-uri's parse policy can change without breaking a library that exposes `sip_uri_types::Uri`. Before 0.3, every sip-uri minor was also a breaking release for every crate that exposed a URI.
 
 ## Parsing is the `UriParse` trait, not `FromStr`
 
@@ -189,7 +189,7 @@ assert_eq!(uri.param("maddr"), None);                   // absent
 
 The new `user_param()` looks up the params inside the userinfo in the same way.
 
-The collections are opaque types instead of slices of tuples, so their storage can change within 1.x:
+The collections are opaque types instead of slices of tuples, so their storage can change without breaking callers:
 
 | 0.2 | 0.3 |
 |---|---|
@@ -248,6 +248,6 @@ sip-uri parses URIs only (`addr-spec`). `"Alice" <sip:alice@example.com>;tag=abc
 
 - Conversions: `Host` from `Ipv4Addr`, `Ipv6Addr` and `IpAddr`, and `Host::ip()` back; `Uri` from `OtherUri`; `SipUri`, `TelUri` and `UrnUri` through `TryFrom<Uri>`, the `Uri` handed back as the error when it is another kind; `AsRef<str>` on `Hostname` and `OtherUri`; `Scheme::default_port()`; `Parsed::map()` to change the value and keep the warnings.
 - A URI is edited in place: `SipUri::with_host()`, and `params_mut()`, `user_params_mut()` and `headers_mut()` on `SipUri` (`params_mut()` on `TelUri`) give the collection, whose `set()`, `remove()` and `retain()` work by case-insensitive name. `set()` replaces the first match in place, removes later ones and appends when absent; every insertion canonizes as the builders do.
-- `Uri` and `Scheme` are exhaustive; 0.2 marked them `#[non_exhaustive]`. A `match` naming every variant needs no `_` arm, and one that has it gets an unreachable-pattern warning. The set is fixed for 1.x: any other scheme is `Uri::Other`.
+- `Uri` and `Scheme` are exhaustive; 0.2 marked them `#[non_exhaustive]`. A `match` naming every variant needs no `_` arm, and one that has it gets an unreachable-pattern warning. The set is fixed: any other scheme is `Uri::Other`.
 - `SipUri`, `TelUri`, `UrnUri` and `Uri` implement `Hash`, consistent with `Eq`. Both compare the canonical form component by component, never RFC 3261 §19.1.4 equivalence: param order, param and header name case, tel: visual separators and a hostname's trailing dot all count.
 - `UriEquivalence::equivalent` compares URIs as RFC 3261 §19.1.4, RFC 3966 §4 and RFC 8141 §3 define equivalence: `sip:%61lice@example.com;transport=TCP` is equivalent to, though not `==`, `sip:alice@EXAMPLE.com;Transport=tcp`.
