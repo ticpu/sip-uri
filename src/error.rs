@@ -4,18 +4,20 @@ use crate::warning::{ParseWarning, Parsed};
 
 /// Error returned by every parser in this crate.
 ///
-/// Lenient parsing fails only on [`Empty`](ParseError::Empty) and
-/// [`SchemeMismatch`](ParseError::SchemeMismatch); strict parsing also
-/// returns the first grammar breach as
-/// [`NonConformant`](ParseError::NonConformant). Display never quotes the
-/// input.
+/// Lenient parsing fails only on [`Empty`](ParseError::Empty),
+/// [`SchemeMismatch`](ParseError::SchemeMismatch) and, for a standalone
+/// host, [`NoHost`](ParseError::NoHost); strict parsing also returns the
+/// first grammar breach as [`NonConformant`](ParseError::NonConformant).
+/// Display never quotes the input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseError {
-    /// The input is empty, or holds nothing this type can represent.
+    /// The input is empty.
     Empty,
     /// The input's scheme names another kind of URI.
     SchemeMismatch,
+    /// A standalone host's input holds no readable host.
+    NoHost,
     /// A strict parse met a grammar breach.
     NonConformant(ParseWarning),
 }
@@ -25,6 +27,7 @@ impl fmt::Display for ParseError {
         match self {
             ParseError::Empty => f.write_str("empty input"),
             ParseError::SchemeMismatch => f.write_str("scheme belongs to another URI type"),
+            ParseError::NoHost => f.write_str("no readable host"),
             ParseError::NonConformant(w) => write!(f, "non-conformant URI: {w}"),
         }
     }

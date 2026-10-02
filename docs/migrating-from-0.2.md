@@ -101,16 +101,18 @@ In 0.3, nearly everything those messages described is a typed `ParseWarning`. Ea
 - the byte offset (`position`);
 - whether the value survived (`WarningKind::Recovered`) or the component was dropped (`WarningKind::Lost`).
 
-That leaves an error only two cases, and both are the same for every URI type:
+That leaves a lenient parse three errors — empty input, another type's scheme, and for `Host` alone no readable host — and a strict one a fourth:
 
-```rust
+```rust,ignore
 #[non_exhaustive]
 pub enum ParseError {
-    /// Nothing to read.
+    /// The input is empty.
     Empty,
-    /// The scheme names another URI type, e.g. `tel:` parsed as `SipUri`.
+    /// The input's scheme names another kind of URI.
     SchemeMismatch,
-    /// A strict parse met a grammar breach; the warning says which.
+    /// A standalone host's input holds no readable host.
+    NoHost,
+    /// A strict parse met a grammar breach.
     NonConformant(ParseWarning),
 }
 ```

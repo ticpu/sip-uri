@@ -120,6 +120,9 @@ fn find_host_end(s: &str) -> usize {
 
 /// Parse a complete host, with no surrounding URI.
 pub(crate) fn parse(s: &str) -> Result<Parsed<Host>, ParseError> {
+    if s.is_empty() {
+        return Err(ParseError::Empty);
+    }
     let mut warnings = Warnings::new(s);
     // A bare IPv6 has to be recognized up front: the URI parser stops the
     // host at the first `:`, which is inside the address here.
@@ -131,7 +134,7 @@ pub(crate) fn parse(s: &str) -> Result<Parsed<Host>, ParseError> {
 
     let (host, consumed) = parse_from_uri(s, &mut warnings);
     let Some(host) = host else {
-        return Err(ParseError::Empty);
+        return Err(ParseError::NoHost);
     };
     if consumed != s.len() {
         warnings.push(Component::Host, WarningCode::TrailingContent, s, consumed);
@@ -236,9 +239,11 @@ mod tests {
 
     #[test]
     fn parse_rejects_only_unreadable_hosts() {
-        for input in ["[192.0.2.1]", "[2001:db8::1", ":5060", ""] {
-            assert!(
-                Host::parse(input).is_err(),
+        assert_eq!(Host::parse(""), Err(ParseError::Empty));
+        for input in ["[", "[192.0.2.1]", "[2001:db8::1", ":5060"] {
+            assert_eq!(
+                Host::parse(input),
+                Err(ParseError::NoHost),
                 "expected rejection of {input:?}"
             );
         }

@@ -36,7 +36,7 @@ sip-uri = "0.3.0-rc.1"
 | `Params`, `UserParams`, `Headers` | Ordered `(name, value)` pairs, canonized on insertion; `iter()`, `retain()`, and case-insensitive `get()`, `set()` and `remove()`; `SipUri::params_mut()` and its siblings edit them in place |
 | `Host` | IPv4, IPv6, or `Hostname` (lowercase by construction) |
 | `Scheme` | `Sip` or `Sips` |
-| `ParseError` | `Empty`, `SchemeMismatch`, or `NonConformant` from a strict parse |
+| `ParseError` | `Empty`, `SchemeMismatch`, `NoHost` for a standalone host, or `NonConformant` from a strict parse |
 | `Parsed` / `ParseWarning` | Value plus the grammar breaches the parser accepted |
 | `Redaction` | What `UriRedact::redacted()` masks when a URI is rendered for logs |
 | `UriEquivalence` | RFC 3261, RFC 3966 and RFC 8141 URI equivalence, apart from `Eq` |
@@ -230,9 +230,10 @@ Parsing is best-effort: whatever an input breaks in the grammar, the parser
 returns what it could read, and `parse_with_warnings` reports each breach as a
 typed `ParseWarning` (component, code, byte position, whether the value
 survived). A missing or unreadable scheme, host, port, number, NID or NSS is
-`None` with a warning. The only errors are empty input and a scheme that
-belongs to another type (`tel:` parsed as `SipUri`); `Uri` keeps anything else
-as `Other`. `parse` accepts exactly the same input and drops the warnings.
+`None` with a warning. The only errors are empty input, a scheme that belongs
+to another type (`tel:` parsed as `SipUri`), and, for `Host` alone, input with
+no readable host; `Uri` keeps anything else as `Other`. `parse` accepts exactly
+the same input and drops the warnings.
 Warnings never quote the input, since a user part often holds a phone number.
 
 ```rust
