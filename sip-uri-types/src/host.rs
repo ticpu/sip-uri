@@ -5,8 +5,7 @@ use crate::canon;
 
 /// Host component of a SIP URI.
 ///
-/// Parse text into one with sip-uri's
-/// [`UriParse`](https://docs.rs/sip-uri/latest/sip_uri/trait.UriParse.html).
+/// Parse text into one with sip-uri's `UriParse`.
 ///
 /// IPv6 addresses are stored without brackets; [`fmt::Display`] adds them,
 /// and [`Host::bare`] renders without. A URI holds a hostname that reads as

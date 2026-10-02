@@ -5,8 +5,7 @@ use crate::params::{self, Params};
 
 /// tel: URI per RFC 3966.
 ///
-/// Parse text into one with sip-uri's
-/// [`UriParse`](https://docs.rs/sip-uri/latest/sip_uri/trait.UriParse.html).
+/// Parse text into one with sip-uri's `UriParse`.
 ///
 /// Represents a telephone number with optional parameters.
 /// Global numbers start with `+`. A local number without the `phone-context`
