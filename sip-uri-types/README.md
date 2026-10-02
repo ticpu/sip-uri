@@ -36,15 +36,15 @@ assert_eq!(tel.number(), Some("+1555%3Bx=1"));
 | `Host`, `Hostname`, `Bare` | IPv4, IPv6 or a canonical hostname; `bare()` renders IPv6 without brackets |
 | `UserHost`, `AssignedName` | `Display` adapters from `SipUri::user_host()` (`user@host:port`) and `UrnUri::assigned_name()` (`urn:NID:NSS`) |
 | `Scheme` | `Sip` or `Sips` |
-| `encoding` | One encoder and one decoder per component, between logical bytes and the text a builder holds unchanged: `encode_user`, `decode_user`, `encode_header`, … |
+| `encoding` | One encoder and one decoder per component a builder takes as text, between logical bytes and the text a builder holds unchanged: `encode_user`, `decode_user`, `encode_header`, … |
 
 ## Canonical form
 
-Each component keeps its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase `%XX`. An escaped reserved character stays escaped, so `%2B1` and `+1` are distinct users.
+Each component keeps its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase `%XX`; tel: numbers, fragments and URN components decode none. An escaped reserved character stays escaped, so `%2B1` and `+1` are distinct users.
 
 Builders and parts structs take URI text, not logical values: `with_user("%2B1")` holds `%2B1`. The `encoding` module converts between logical bytes and that text: `decode_user("%2B1")` gives the bytes `+1`, and `encode_user("a b")` gives `a%20b`, escaping only what the user part does not keep literal.
 
-Hostnames are lowercased as ASCII only, with no IDNA and no non-ASCII case folding, and a hostname that reads as an IPv4 address is held as `Host::IPv4`. IPv6 renders as the standard library displays it, and an IPv6 zone ID is not representable.
+Hostnames are lowercased as ASCII only, with no IDNA and no non-ASCII case folding, and a URI holds a hostname that reads as an IPv4 address as `Host::IPv4`. IPv6 renders as the standard library displays it, and an IPv6 zone ID is not representable.
 
 ## Equality
 

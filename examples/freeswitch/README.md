@@ -131,13 +131,13 @@ material for a discrepancy report upstream, and a dialplan can branch on it:
 ```
 
 The `^^|` prefix tells `multiset` to split the payload on `|` instead of a
-space. A user part decodes `%3D`, so it can legitimately contain `=`, while a
-`|` or a space in any component is held escaped. Should a delimiter still
-reach a name or value, `vars` refuses rather than emit a payload that would
-silently set an unintended variable:
+space. A user part may hold a literal `=`, while a `|` or a space in any
+component is held escaped. Should a delimiter still reach a name or value,
+`vars` refuses rather than emit a payload that would silently set an
+unintended variable:
 
-```
-fs-sip-uri: user contains '|', refusing to emit a payload
+```text
+fs-sip-uri: <name> contains '|', refusing to emit a payload
 ```
 
 `multiset` splits each pair on its *first* `=`, so a value containing `=`
@@ -186,7 +186,7 @@ Failures print nothing on stdout, write one line to stderr, and exit non-zero:
 does not exist. FreeSWITCH logs the child's stderr and its exit status, both
 naming the full command:
 
-```
+```text
 [WARNING] switch_core.c:3481 STDERR of cmd (…/fs-sip-uri get bogus sip:a@example.com):
           fs-sip-uri: unknown field "bogus"
 [WARNING] switch_core.c:3494 Exit status (512): …/fs-sip-uri get bogus sip:a@example.com

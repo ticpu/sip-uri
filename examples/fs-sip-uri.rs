@@ -141,7 +141,7 @@ fn main() -> ExitCode {
 
 /// Accept the `<sip:...>` wrapper a name-addr puts around the URI. A display
 /// name or trailing header params are header grammar, not URI grammar: the
-/// text then parses as an unrecognized scheme warning `scheme:invalid-scheme`.
+/// text then parses as type `other` with the warning `scheme:invalid-scheme`.
 fn strip_angle_brackets(s: &str) -> &str {
     s.strip_prefix('<')
         .and_then(|inner| inner.strip_suffix('>'))

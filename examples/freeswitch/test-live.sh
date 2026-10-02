@@ -135,13 +135,13 @@ check 'sip:1411@[2001:db8::1]:5061;user=phone' uri_host='[2001:db8::1]' uri_port
 check 'sip:a%3Bb@host.example.com' uri_user='a%3Bb'
 
 # multiset splits each pair on the first '=', so a value may contain one.
-check 'sip:a%3Db@host.example.com' uri_user='a=b'
+check 'sip:a=b@host.example.com' uri_user='a=b'
 
 # Text that is not a SIP, tel or URN URI is type other, with a warning.
 check 'garbage-not-a-uri' uri_type=other uri_warnings=scheme:missing-scheme uri_host=_undef_ inline_user=_undef_
 
-# A raw delimiter in a component aborts the payload rather than corrupting it.
-check 'sip:a|b@host.example.com' uri_type=_undef_ inline_user='a|b'
+# A raw delimiter in a component is held escaped, with a warning.
+check 'sip:a|b@host.example.com' uri_type=sip uri_user=a%7Cb uri_warnings=user:invalid-char inline_user=a%7Cb
 
 # The first parse sets user, port and a param the second URI lacks; multiunset
 # must leave none of them readable, and no parse sets a password.

@@ -164,8 +164,8 @@ impl UrnUri {
     /// ```
     /// use sip_uri_types::UrnUri;
     ///
-    /// let urn = UrnUri::new("service", "sos").with_q_component("x");
-    /// assert_eq!(urn.assigned_name().to_string(), "urn:service:sos");
+    /// let urn = UrnUri::new("service", "counseling").with_q_component("x");
+    /// assert_eq!(urn.assigned_name().to_string(), "urn:service:counseling");
     /// ```
     pub fn assigned_name(&self) -> AssignedName<'_> {
         AssignedName(self)

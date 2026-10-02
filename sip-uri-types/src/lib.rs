@@ -25,13 +25,14 @@
 //!
 //! Each component keeps its conformant characters literal, decodes escapes
 //! of unreserved characters only, and holds every other byte as an uppercase
-//! `%XX`, whichever path built the value. An escaped reserved character
+//! `%XX`, whichever path built the value. A tel: number, a fragment and a
+//! URN component decode no escape at all. An escaped reserved character
 //! stays escaped, so `%2B1` and `+1` are distinct users.
 //!
 //! Builders and parts structs take URI text, not logical values: a well-formed
 //! `%XX` in it is read as an escape, never re-encoded. `with_user("%2B1")`
-//! holds `%2B1`. [`encoding`] has one encoder and one decoder per component,
-//! between logical bytes and that text.
+//! holds `%2B1`. [`encoding`] has one encoder and one decoder per component
+//! a builder takes as text, between logical bytes and that text.
 //!
 //! Hostnames are lowercased as ASCII only, with no IDNA and no non-ASCII case
 //! folding. An IPv6 address renders as [`std::net::Ipv6Addr`] displays it,
@@ -39,12 +40,11 @@
 //!
 //! # Equality
 //!
-//! `Eq` and `Hash` compare the canonical form component by
-//! component. That is identity, never RFC 3261 §19.1.4 or RFC 8141
-//! equivalence: param order, param and header name case, a tel:
-//! number's visual separators, a hostname's trailing dot and a URN's
-//! r-, q- and f-components all count. RFC equivalence is sip-uri's
-//! `UriEquivalence`.
+//! `Eq` and `Hash` compare the canonical form component by component. That
+//! is identity, never RFC 3261 §19.1.4, RFC 3966 §4 or RFC 8141 §3
+//! equivalence: param order, param and header name case, a tel: number's
+//! visual separators, a hostname's trailing dot and a URN's r-, q- and
+//! f-components all count. RFC equivalence is sip-uri's `UriEquivalence`.
 //!
 //! # Stability
 //!

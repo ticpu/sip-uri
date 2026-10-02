@@ -11,8 +11,9 @@ use crate::urn_uri::UrnUri;
 /// Parse text into one with sip-uri's `UriParse`.
 ///
 /// The `Other` variant keeps text without a structure of its own (e.g. `http:`,
-/// `https:`, `data:`, or text without a scheme), so header values like
-/// `Call-Info` round-trip without rejecting non-SIP URIs.
+/// `https:`, `data:`, or text without a scheme) as sent, apart from a
+/// lowercased scheme and escaped bytes that would break a header line,
+/// decoding nothing, so header values like `Call-Info` keep non-SIP URIs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "serde",

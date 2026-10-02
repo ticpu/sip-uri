@@ -69,11 +69,11 @@ pub enum HeaderMask {
 ///     }
 /// }
 ///
-/// let logger = Logger::new(&["participantid".to_string()]);
-/// let uri = SipUri::parse("sip:+15551234567@example.com;ParticipantId=7").unwrap();
+/// let logger = Logger::new(&["session".to_string()]);
+/// let uri = SipUri::parse("sip:+15551234567@example.com;session=7").unwrap();
 /// assert_eq!(
 ///     logger.line(&uri),
-///     "call from sip:+xxxxxxx4567@example.com;ParticipantId=***"
+///     "call from sip:+xxxxxxx4567@example.com;session=***"
 /// );
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]

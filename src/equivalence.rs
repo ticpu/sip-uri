@@ -12,19 +12,20 @@ mod sealed {
 ///   never matching one written, even 5060. A `user`, `ttl`, `method`,
 ///   `maddr` or `transport` param must match when either URI has it; any
 ///   other param is compared only when both have it. Param names and values
-///   compare case-insensitively and in any order. Headers must match in any
-///   order, names case-insensitively and values exactly. Fragments, which
+///   compare case-insensitively and in any order. Headers must match as a
+///   multiset, names case-insensitively and values exactly. Fragments, which
 ///   RFC 3261 does not define, must match exactly.
 /// - [`TelUri`], RFC 3966 §4: the numbers match with visual separators
 ///   removed, case-insensitively; every param must be in both, in any order,
-///   names and values case-insensitive, and a `phone-context` or `ext`
-///   value has its visual separators removed. Fragments must match exactly.
+///   names and values case-insensitive. An `ext` value, or a `phone-context`
+///   that is a global number, has its visual separators removed; a domain
+///   `phone-context` compares case-insensitively. Fragments must match
+///   exactly.
 /// - [`UrnUri`], RFC 8141 §3: the NID and NSS match on canonical form; the
 ///   r-, q- and f-components are ignored.
 /// - [`Uri`] compares within one variant, and [`Uri::Other`] by `Eq`.
 ///
-/// A param or header name that appears more than once is compared by its
-/// first value.
+/// A param name that appears more than once is compared by its first value.
 ///
 /// ```
 /// use sip_uri::{SipUri, UriEquivalence, UriParse};

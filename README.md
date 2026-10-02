@@ -41,7 +41,7 @@ sip-uri = "0.3.0-rc.1"
 | `Redaction` | What `UriRedact::redacted()` masks when a URI is rendered for logs |
 | `UriEquivalence` | RFC 3261, RFC 3966 and RFC 8141 URI equivalence, apart from `Eq` |
 
-The URI and host types implement `UriParse`, `Display`, `Debug`, `Clone`, `PartialEq`, `Eq` and `Hash`.
+`Uri`, `SipUri`, `TelUri`, `UrnUri` and `Host` implement `UriParse`, and every URI and host type implements `Display`, `Debug`, `Clone`, `PartialEq`, `Eq` and `Hash`.
 Parsing is a trait, not `FromStr`, so bring `sip_uri::UriParse` into scope.
 Schemes and hosts are case-insensitive and stored lowercase; parameter and
 header lookup is case-insensitive. `Eq` and `Hash` are canonical-structural
@@ -196,17 +196,18 @@ Every component holds one canonical form, whether parsed or built:
 
 - Each URI component has its own allowed character set
 - Escapes of unreserved characters are decoded (`%41` -> `A`); an escaped
-  reserved character stays escaped, so `%2B` is not `+`; URN components and
-  tel: numbers decode none
+  reserved character stays escaped, so `%2B` is not `+`; URN components, tel:
+  numbers and fragments decode none
 - Every other byte is an uppercase escape, whether it arrived escaped
   (`%3d` -> `%3D`) or literal (a space in a user part -> `%20`)
 - A user part also keeps a literal `#`, and `%23` stays a distinct value
-- Hostnames are lowercased as ASCII only, with no IDNA, and one that reads as
-  an IPv4 address is held as `Host::IPv4`
+- Hostnames are lowercased as ASCII only, with no IDNA, and a URI holds a
+  hostname that reads as an IPv4 address as `Host::IPv4`
 - Builders and parts structs take URI text, so `with_user("%2B1")` holds
   `%2B1`, not `+1`
-- `sip_uri::encoding` has one encoder and one decoder per component, for
-  callers holding the logical value rather than the canonical form:
+- `sip_uri::encoding` has one encoder and one decoder per component a builder
+  takes as text, for callers holding the logical value rather than the
+  canonical form:
   `encode_header` turns bytes into text `with_header` holds unchanged, and
   `decode_user` fully decodes a user part (every `%XX`, bytes out), e.g.
   FreeSWITCH's `sip_req_user`
@@ -304,18 +305,19 @@ Adapters exist for `uri`, `sip_uri`, `tel_uri`, `urn_uri` and `host`, each with 
 
 ## Design
 
-- **No third-party dependencies** — sip-uri depends only on sip-uri-types, which depends on nothing but an optional `serde`. Not even `percent-encoding`: the subset needed is trivial and avoids transitive dep churn.
+- **Minimal dependencies** — sip-uri depends on sip-uri-types and, with the `serde` feature, serde; sip-uri-types depends on nothing but an optional `serde`. Not even `percent-encoding`: the subset needed is trivial and avoids transitive dep churn.
 - **Hand-written parser** — the SIP URI grammar is regular enough that nom/regex
   are unnecessary overhead. Parsing follows the sofia-sip two-phase `@` discovery
   algorithm for correct handling of reserved characters in user-parts.
 - **Case-insensitive where required** — scheme and parameter name lookup are
   case-insensitive per RFC. Host names are lowercased.
 - **`#[non_exhaustive]`** — on every public enum and public-field struct but `Uri` and `Scheme`, whose variant set is fixed, so a `match` on them needs no wildcard arm.
-- **Fragment support** — `SipUri` and `TelUri` parse and round-trip `#fragment`
-  components (accepted permissively, matching sofia-sip behavior).
+- **Fragment support** — `SipUri` and `TelUri` keep a `#fragment`, which
+  neither RFC defines, with an `UnexpectedFragment` warning, matching sofia-sip.
 - **Any-scheme fallback** — `Uri::Other` keeps URIs with unrecognized schemes
-  (http, https, data, etc.) as sent, decoding nothing, so header values like
-  `Call-Info` that carry non-SIP URIs still parse.
+  (http, https, data, etc.) as sent apart from a lowercased scheme and escaped
+  bytes that would break a header line, decoding nothing, so header values
+  like `Call-Info` that carry non-SIP URIs still parse.
 
 ## RFC coverage
 
@@ -338,8 +340,10 @@ cargo build --profile release-min --target x86_64-unknown-linux-musl --example f
 
 ## Development
 
-`hooks/install.sh` links the pre-commit hook, which runs fmt, clippy, doc
-coverage, tests and gitleaks on every commit.
+`hooks/install.sh` symlinks two hooks into `.git/hooks`, removing any local
+core.hooksPath that would bypass them. pre-commit refuses Cargo.lock staged on
+a branch, then runs fmt, clippy, doc coverage, tests and gitleaks on the staged
+content; pre-push refuses a branch whose tip tracks Cargo.lock.
 
 ## Other Rust SIP URI crates
 

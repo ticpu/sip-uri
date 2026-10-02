@@ -21,7 +21,7 @@ sip-uri-types changes only when a value's identity changes: its components, its 
 
 ## Parsing is the `UriParse` trait, not `FromStr`
 
-```rust
+```rust,ignore
 // 0.2
 let uri: Uri = s.parse()?;
 let sip: SipUri = s.parse()?;
@@ -63,14 +63,14 @@ A few inputs that were errors now parse to something:
 
 - **Missing scheme:** `"joe@example.com"` as `SipUri` has scheme `None` and a `MissingScheme` warning. As `Uri`, it is `Uri::Other`, since `Uri` never guesses a type for scheme-less text. Parse it as `SipUri` when your context says it is SIP.
 - **Wildcard:** `"*"` as `Uri` is `Uri::Other` with a `Wildcard` warning.
-- **Brackets:** `"<sip:alice@example.com>"` as `Uri` is `Uri::Other` with a scheme warning. That text is header grammar; see [Display names](#display-names-and-header-params) below.
-- **Unreadable scheme:** as `SipUri`, text whose scheme cannot be read keeps everything up to `@` as the user part, and the `:` ending that prefix starts no password. `"<sip:+15551234567@example.com>"` has user `%3Csip%3A+15551234567` and an `InvalidScheme` warning; nothing is trimmed or dropped.
+- **Brackets:** `"<sip:alice@example.com>"` as `Uri` stays `Uri::Other`, as in 0.2.9, now held escaped as `%3Csip:alice@example.com%3E` with an `InvalidScheme` warning; as `SipUri` it is no longer an error. That text is header grammar; see [Display names](#display-names-and-header-params) below.
+- **Unreadable scheme:** as `SipUri`, text whose scheme cannot be read keeps everything up to `@` as the user part, and the `:` ending that prefix starts no password. `"<sip:+15551234567@example.com>"` has user `%3Csip%3A+15551234567` and an `InvalidScheme` warning, and the trailing `>` is dropped with a `TrailingContent` warning.
 
 ### Refusing non-conformant input
 
 `parse` accepts exactly what `parse_with_warnings` accepts, and drops the warnings. So code that used a failed parse to refuse bad input has to ask explicitly:
 
-```rust
+```rust,ignore
 // 0.2: a failed parse meant "malformed"
 let Ok(uri) = s.parse::<SipUri>() else { return reject() };
 
@@ -123,7 +123,7 @@ Neither errors nor warnings quote the input. A user part often holds a phone num
 
 ## One canonical form per component
 
-Every component holds its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase `%XX`. Builders, parts constructors, deserialization and the parser all go through the same canonizer. A user part also keeps a literal `#`, which phones send unescaped; `%23` stays a distinct value.
+Every component holds its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase `%XX`; tel: numbers, fragments and URN components decode none. Builders, parts constructors, deserialization and the parser all go through the same canonizer. A user part also keeps a literal `#`, which phones send unescaped; `%23` stays a distinct value.
 
 What changes for existing code:
 
@@ -174,7 +174,7 @@ assert_eq!(uri.to_string(), "sip:alice@example.com");
 
 Every field starts absent, the scheme included: without `parts.scheme` the URI prints as `alice@example.com`.
 
-A constructor given an empty component stores it as absent: `with_user("")` gives a URI with no user.
+A constructor given an empty component stores it as absent wherever its delimiter alone would re-parse as nothing: `with_user("")` gives a URI with no user, while `with_password("")` keeps an empty password.
 
 ## Params
 
@@ -196,6 +196,7 @@ The collections are opaque types instead of slices of tuples, so their storage c
 | 0.2 | 0.3 |
 |---|---|
 | `params() -> &[(String, Option<String>)]` | `&Params`; `iter()` yields `(&str, Option<&str>)`, `get()` looks up case-insensitively |
+| `param(name) -> Option<&Option<String>>`, on `SipUri` and `TelUri` | `Option<Option<&str>>` |
 | `user_params() -> &[(String, Option<String>)]` | `&UserParams`, the same API |
 | `headers() -> &[(String, String)]` | `&Headers`, the same API; a value is `Option<&str>` |
 | `header(name) -> Option<&str>` | `Option<Option<&str>>`, like `param()` |
@@ -203,7 +204,7 @@ The collections are opaque types instead of slices of tuples, so their storage c
 | `with_param(name, Some(value.into()))`, `with_user_param(…)` | `with_param(name, Some(value))`: values are `Option<&str>`, as in `Params::with` |
 | `with_user_params(Vec<…>)` | takes a `UserParams`, or the same `Vec` through `From` |
 
-`push`, `From` and `collect()` canonize each pair by its component's grammar, which is why user-params have a type of their own: `=` is literal in a user-param value and escaped in a URI param. A header written without `=`, as in `sip:example.com?Flag`, holds no value and prints as it came; 0.2 read it as empty and printed `?Flag=`.
+`push`, `From` and `collect()` canonize each pair by its component's grammar, which is why user-params have a type of their own: `=` is literal in a user-param value and escaped in a URI param. A header written without `=`, as in `sip:example.com?Flag`, holds no value and prints as it came; 0.2 refused to parse it, and its builder could only write `?Flag=`.
 
 ## Logging
 
@@ -241,6 +242,8 @@ Each writes into a formatter without allocating, as `Host::bare()` does.
 |---|---|
 | `NameAddr` | `sip_header::SipHeaderAddr`, or `Uri` for a bare URI |
 | `Host::fmt_uri(f)` | `Display` |
+| `sip_uri::decode_user` | `sip_uri::encoding::decode_user` |
+| `sip_uri::encode_uri_header(&str) -> Cow<str>` | `sip_uri::encoding::encode_header(bytes) -> String` |
 
 ## Display names and header params
 

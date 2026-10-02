@@ -302,7 +302,7 @@ impl SipUri {
 
     /// Parameters within the userinfo (before `@`), separated by `;` in the user part.
     ///
-    /// Common in tel-style SIP URIs, e.g., `sip:+15551234567;cpc=emergency@host`.
+    /// Common in tel-style SIP URIs, e.g., `sip:+15551234567;cpc=ordinary@host`.
     pub fn user_params(&self) -> &UserParams {
         &self.user_params
     }
