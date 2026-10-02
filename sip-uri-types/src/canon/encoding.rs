@@ -1,6 +1,13 @@
 //! Logical bytes to the URI text a builder takes, and back.
 //!
-//! Every component that builders and parts structs take as URI text has one encoder and one decoder. An encoder escapes each byte its component does not keep literal as uppercase `%XX` and cannot fail; its output is already canonical, so the builder holds it unchanged and the matching decoder gives the bytes back. A decoder turns every well-formed `%XX` into its byte and copies a malformed `%` verbatim. It returns bytes, never `str`, since an escape may stand for part of a UTF-8 sequence or for none, and it borrows its input when that holds no `%`.
+//! Every component that builders and parts structs take as URI text has
+//! one encoder and one decoder. An encoder escapes each byte its component
+//! does not keep literal as uppercase `%XX` and cannot fail; its output is
+//! already canonical, so the builder holds it unchanged and the matching
+//! decoder gives the bytes back. A decoder turns every well-formed `%XX`
+//! into its byte and copies a malformed `%` verbatim. It returns bytes,
+//! never `str`, since an escape may stand for part of a UTF-8 sequence or
+//! for none, and it borrows its input when that holds no `%`.
 //!
 //! Hostnames and URN NIDs have no pair: both are lowercased, so their bytes cannot round-trip.
 //!

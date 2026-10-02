@@ -4,7 +4,8 @@ use crate::canon;
 
 /// URN (Uniform Resource Name) per RFC 8141.
 ///
-/// Parse text into one with sip-uri's [`UriParse`](https://docs.rs/sip-uri/latest/sip_uri/trait.UriParse.html).
+/// Parse text into one with sip-uri's
+/// [`UriParse`](https://docs.rs/sip-uri/latest/sip_uri/trait.UriParse.html).
 ///
 /// Represents `urn:NID:NSS` with optional resolution (`?+`), query (`?=`),
 /// and fragment (`#`) components.

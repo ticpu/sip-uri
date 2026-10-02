@@ -23,21 +23,36 @@
 //!
 //! # Canonical form
 //!
-//! Each component keeps its conformant characters literal, decodes escapes of unreserved characters only, and holds every other byte as an uppercase `%XX`, whichever path built the value. An escaped reserved character stays escaped, so `%2B1` and `+1` are distinct users.
+//! Each component keeps its conformant characters literal, decodes escapes
+//! of unreserved characters only, and holds every other byte as an uppercase
+//! `%XX`, whichever path built the value. An escaped reserved character
+//! stays escaped, so `%2B1` and `+1` are distinct users.
 //!
-//! Builders and parts structs take URI text, not logical values: a well-formed `%XX` in it is read as an escape, never re-encoded. `with_user("%2B1")` holds `%2B1`. [`encoding`] has one encoder and one decoder per component, between logical bytes and that text.
+//! Builders and parts structs take URI text, not logical values: a well-formed
+//! `%XX` in it is read as an escape, never re-encoded. `with_user("%2B1")`
+//! holds `%2B1`. [`encoding`] has one encoder and one decoder per component,
+//! between logical bytes and that text.
 //!
-//! Hostnames are lowercased as ASCII only, with no IDNA and no non-ASCII case folding. An IPv6 address renders as [`std::net::Ipv6Addr`] displays it, and an IPv6 zone ID is not representable.
+//! Hostnames are lowercased as ASCII only, with no IDNA and no non-ASCII case
+//! folding. An IPv6 address renders as [`std::net::Ipv6Addr`] displays it,
+//! and an IPv6 zone ID is not representable.
 //!
 //! # Equality
 //!
-//! `Eq` and `Hash` compare the canonical form component by component. That is identity, never RFC 3261 §19.1.4 or RFC 8141 equivalence: param order, param and header name case, a tel: number's visual separators, a hostname's trailing dot and a URN's r-, q- and f-components all count. RFC equivalence is sip-uri's [`UriEquivalence`](https://docs.rs/sip-uri/latest/sip_uri/trait.UriEquivalence.html).
+//! `Eq` and `Hash` compare the canonical form component by
+//! component. That is identity, never RFC 3261 §19.1.4 or RFC 8141
+//! equivalence: param order, param and header name case, a tel:
+//! number's visual separators, a hostname's trailing dot and a URN's
+//! r-, q- and f-components all count. RFC equivalence is sip-uri's
+//! [`UriEquivalence`](https://docs.rs/sip-uri/latest/sip_uri/trait.UriEquivalence.html).
 //!
 //! # Stability
 //!
-//! The URI kinds with their own type are fixed: a URI with any other scheme is [`Uri::Other`]. [`Uri`] and [`Scheme`] are therefore exhaustive.
+//! The URI kinds with their own type are fixed: a URI with any other scheme
+//! is [`Uri::Other`]. [`Uri`] and [`Scheme`] are therefore exhaustive.
 //!
-//! The minimum supported Rust version is 1.70, 1.71 with the `serde` feature. Raising it is a minor release.
+//! The minimum supported Rust version is 1.70, 1.71 with the `serde`
+//! feature. Raising it is a minor release.
 
 #![forbid(unsafe_code)]
 
