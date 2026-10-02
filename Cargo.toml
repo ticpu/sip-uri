@@ -7,7 +7,7 @@ edition = "2021"
 rust-version = "1.70"
 authors = ["Jérôme Poulin <jeromepoulin@gmail.com>"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/ticpu/sip-uri"
+repository = "https://github.com/voip-rs/sip-uri"
 
 # serde_derive's proc-macro dependencies need a newer toolchain than the crates.
 [workspace.metadata]
