@@ -296,7 +296,7 @@ struct Call {
 }
 ```
 
-Adapters exist for `uri`, `sip_uri`, `tel_uri`, `urn_uri` and `host`, each with an `option` submodule. A read that fails reports the `ParseError`, never the text.
+Adapters exist for `uri`, `sip_uri`, `tel_uri`, `urn_uri` and `host`, each with an `option` submodule. A read that fails reports the `ParseError`, or the type it expected, never the value it read.
 
 ## Migrating from 0.2
 

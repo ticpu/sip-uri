@@ -2,8 +2,8 @@
 //! it back with the lenient parser.
 //!
 //! Use one with `#[serde(with = …)]`, or its `option` submodule for an
-//! `Option` field. A read that fails reports the [`ParseError`](crate::ParseError), never the
-//! text.
+//! `Option` field. A read that fails reports the [`ParseError`], or the type
+//! it expected, never the value it read.
 //!
 //! ```
 //! # use serde::{Deserialize, Serialize};
@@ -21,22 +21,72 @@
 //! assert_eq!(serde_json::to_string(&call).unwrap(), r#"{"to":"tel:+15551234567","contact":null}"#);
 //! ```
 
-use std::fmt::Display;
+use std::fmt::{self, Display};
+use std::marker::PhantomData;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::{Error, Visitor};
+use serde::{Deserializer, Serialize, Serializer};
 
-use crate::UriParse;
+use crate::{ParseError, UriParse};
 
 fn serialize<T: Display, S: Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.collect_str(value)
 }
 
-fn parse<T: UriParse, E: serde::de::Error>(text: &str) -> Result<T, E> {
-    T::parse(text).map_err(E::custom)
+/// A read's outcome: the deserializer's own error, or the parse result.
+type Read<T, E> = Result<Result<T, ParseError>, E>;
+
+/// The value read, an error naming only what was `expected` when the
+/// deserializer failed, or the parse error.
+fn read_text<T, E: Error>(expected: &str, read: Read<T, E>) -> Result<T, E> {
+    // The error is dropped unread: serde's messages quote the value.
+    read.map_err(|_| E::custom(format_args!("invalid type: expected {expected}")))?
+        .map_err(E::custom)
+}
+
+struct TextVisitor<T>(PhantomData<T>);
+
+impl<T: UriParse> Visitor<'_> for TextVisitor<T> {
+    type Value = Result<T, ParseError>;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("URI text")
+    }
+
+    fn visit_str<E: Error>(self, text: &str) -> Result<Self::Value, E> {
+        Ok(T::parse(text))
+    }
+}
+
+struct OptionVisitor<T>(PhantomData<T>);
+
+impl<'de, T: UriParse> Visitor<'de> for OptionVisitor<T> {
+    type Value = Result<Option<T>, ParseError>;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("URI text or null")
+    }
+
+    fn visit_none<E: Error>(self) -> Result<Self::Value, E> {
+        Ok(Ok(None))
+    }
+
+    fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
+        Ok(Ok(None))
+    }
+
+    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Read<Option<T>, D::Error> {
+        deserializer
+            .deserialize_str(TextVisitor(PhantomData))
+            .map(|parsed| parsed.map(Some))
+    }
 }
 
 fn deserialize<'de, T: UriParse, D: Deserializer<'de>>(deserializer: D) -> Result<T, D::Error> {
-    parse(&String::deserialize(deserializer)?)
+    read_text(
+        "URI text",
+        deserializer.deserialize_str(TextVisitor(PhantomData)),
+    )
 }
 
 struct AsText<'a, T>(&'a T);
@@ -60,9 +110,10 @@ fn serialize_option<T: Display, S: Serializer>(
 fn deserialize_option<'de, T: UriParse, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<T>, D::Error> {
-    Option::<String>::deserialize(deserializer)?
-        .map(|text| parse(&text))
-        .transpose()
+    read_text(
+        "URI text or null",
+        deserializer.deserialize_option(OptionVisitor(PhantomData)),
+    )
 }
 
 macro_rules! adapter {

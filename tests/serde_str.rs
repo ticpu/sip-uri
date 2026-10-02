@@ -88,3 +88,48 @@ fn parse_errors_name_no_input() {
     assert!(err.contains("scheme belongs to another URI type"), "{err}");
     assert!(!err.contains("5551234567"), "{err}");
 }
+
+#[test]
+fn type_errors_name_no_value() {
+    use serde_json::{Error, Value};
+    use sip_uri::serde_str;
+
+    type Adapter = fn(Value) -> Result<(), Error>;
+    let adapters: [(&str, Adapter); 10] = [
+        ("uri", |v| serde_str::uri::deserialize(v).map(drop)),
+        ("sip_uri", |v| serde_str::sip_uri::deserialize(v).map(drop)),
+        ("tel_uri", |v| serde_str::tel_uri::deserialize(v).map(drop)),
+        ("urn_uri", |v| serde_str::urn_uri::deserialize(v).map(drop)),
+        ("host", |v| serde_str::host::deserialize(v).map(drop)),
+        ("uri::option", |v| {
+            serde_str::uri::option::deserialize(v).map(drop)
+        }),
+        ("sip_uri::option", |v| {
+            serde_str::sip_uri::option::deserialize(v).map(drop)
+        }),
+        ("tel_uri::option", |v| {
+            serde_str::tel_uri::option::deserialize(v).map(drop)
+        }),
+        ("urn_uri::option", |v| {
+            serde_str::urn_uri::option::deserialize(v).map(drop)
+        }),
+        ("host::option", |v| {
+            serde_str::host::option::deserialize(v).map(drop)
+        }),
+    ];
+    let values = [
+        (json!(15551234567_u64), "15551234567"),
+        (json!(true), "true"),
+        (json!({"user": "secret-key"}), "secret-key"),
+        (json!(["secret-item"]), "secret-item"),
+    ];
+    for (name, adapter) in adapters {
+        for (value, quoted) in &values {
+            let err = adapter(value.clone())
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("expected URI text"), "{name}: {err}");
+            assert!(!err.contains(quoted), "{name}: {err}");
+        }
+    }
+}
