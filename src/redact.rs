@@ -6,6 +6,8 @@ use sip_uri_types::SipUri;
 use sip_uri_types::TelUri;
 use sip_uri_types::Uri;
 
+use crate::grammar::ESCAPE_LEN;
+
 const MASK: &str = "***";
 
 /// How the user part, or a tel: number, is rendered by [`Redaction`].
@@ -14,8 +16,8 @@ const MASK: &str = "***";
 pub enum UserMask {
     /// The whole userinfo, user-params and password included, becomes `***`.
     Full,
-    /// Every digit but the last `n` becomes `x`; other characters stay. Suits
-    /// telephone numbers; a name has no digits to mask.
+    /// Every digit outside a `%XX` escape but the last `n` becomes `x`;
+    /// escapes and other characters stay. Suits telephone numbers.
     KeepLast(usize),
     /// The user part is shown as Display writes it.
     Visible,
@@ -189,24 +191,43 @@ fn write_masked_user(f: &mut fmt::Formatter<'_>, user: &str, mask: UserMask) -> 
         UserMask::Full => f.write_str(MASK),
         UserMask::Visible => f.write_str(user),
         UserMask::KeepLast(n) => {
-            let digits = user
-                .bytes()
-                .filter(u8::is_ascii_digit)
-                .count();
-            let mut seen = 0;
-            for c in user.chars() {
-                if c.is_ascii_digit() {
-                    seen += 1;
-                    if seen <= digits.saturating_sub(n) {
-                        f.write_str("x")?;
-                        continue;
-                    }
+            let mut masked = units(user)
+                .filter(is_digit)
+                .count()
+                .saturating_sub(n);
+            for unit in units(user) {
+                if masked > 0 && is_digit(&unit) {
+                    masked -= 1;
+                    f.write_str("x")?;
+                } else {
+                    f.write_str(unit)?;
                 }
-                write!(f, "{c}")?;
             }
             Ok(())
         }
     }
+}
+
+/// `text` split into well-formed `%XX` escapes and single characters.
+fn units(text: &str) -> impl Iterator<Item = &str> {
+    let mut rest = text;
+    std::iter::from_fn(move || {
+        let len = match rest.as_bytes() {
+            [] => return None,
+            [b'%', hi, lo, ..] if hi.is_ascii_hexdigit() && lo.is_ascii_hexdigit() => ESCAPE_LEN,
+            _ => rest
+                .chars()
+                .next()
+                .map_or(1, char::len_utf8),
+        };
+        let (unit, tail) = rest.split_at(len);
+        rest = tail;
+        Some(unit)
+    })
+}
+
+fn is_digit(unit: &&str) -> bool {
+    matches!(unit.as_bytes(), [d] if d.is_ascii_digit())
 }
 
 fn write_params(f: &mut fmt::Formatter<'_>, params: Pairs<'_>, how: &Redaction) -> fmt::Result {

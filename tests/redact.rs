@@ -98,6 +98,23 @@ fn keep_last_masks_only_digits() {
 }
 
 #[test]
+fn keep_last_leaves_escapes_intact() {
+    let how = Redaction::default().user(UserMask::KeepLast(4));
+    assert_eq!(
+        sip("sip:%2B15551234567@example.com")
+            .redacted(&how)
+            .to_string(),
+        "sip:%2Bxxxxxxx4567@example.com"
+    );
+    assert_eq!(
+        sip("sip:%2B1234@example.com")
+            .redacted(&Redaction::default().user(UserMask::KeepLast(2)))
+            .to_string(),
+        "sip:%2Bxx34@example.com"
+    );
+}
+
+#[test]
 fn headers_and_named_params_can_be_masked() {
     let uri = sip("sip:alice@example.com;participantid=abc;user=phone?Replaces=x%40y");
     let how = Redaction::default()
