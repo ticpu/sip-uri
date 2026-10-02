@@ -29,11 +29,7 @@ pub struct UrnUri {
 
 /// The components of a [`UrnUri`], each canonized on conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(default)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub struct UrnUriParts {
     /// The namespace identifier.

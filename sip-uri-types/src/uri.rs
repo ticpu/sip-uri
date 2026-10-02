@@ -16,7 +16,7 @@ use crate::urn_uri::UrnUri;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
+    derive(serde::Serialize),
     serde(rename_all = "lowercase")
 )]
 pub enum Uri {

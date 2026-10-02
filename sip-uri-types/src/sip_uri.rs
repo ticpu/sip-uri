@@ -36,11 +36,7 @@ pub struct SipUri {
 ///
 /// [`fmt::Debug`] writes a password as `***`.
 #[derive(Clone, PartialEq, Eq, Default)]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(default)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub struct SipUriParts {
     /// `sip` or `sips`.
@@ -163,7 +159,7 @@ fn hold_fragment(fragment: &str) -> Option<String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
+    derive(serde::Serialize),
     serde(rename_all = "lowercase")
 )]
 pub enum Scheme {

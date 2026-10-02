@@ -26,11 +26,7 @@ pub struct TelUri {
 
 /// The components of a [`TelUri`], each canonized on conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(default)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[non_exhaustive]
 pub struct TelUriParts {
     /// The telephone number, `+` first for a global one.
